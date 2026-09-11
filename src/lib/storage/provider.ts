@@ -32,7 +32,12 @@ export interface StorageProvider {
   upload(file: File, prefix: string): Promise<StoredFile>;
 }
 
-const MAX_BYTES = 8 * 1024 * 1024;
+/*
+  Kept in step with `serverActions.bodySizeLimit` in next.config.ts. A
+  cap above that one is a promise the framework will not keep: the
+  request dies before this check ever runs.
+*/
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 
 export class StorageError extends Error {}
@@ -41,8 +46,8 @@ function assertUploadable(file: File): void {
   if (!ALLOWED.has(file.type)) {
     throw new StorageError('Images must be JPEG, PNG, WebP or AVIF.');
   }
-  if (file.size > MAX_BYTES) {
-    throw new StorageError('Images need to be under 8 MB. Export a smaller version.');
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new StorageError('Images need to be under 4 MB. Export a smaller version.');
   }
   if (file.size === 0) {
     throw new StorageError('That file was empty.');

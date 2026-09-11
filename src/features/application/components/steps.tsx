@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { ArrowRight, ImagePlus, Star, Trash2 } from 'lucide-react';
 
@@ -349,8 +349,38 @@ export function AmenitiesStep({
 
 /* ── Step 5 ─────────────────────────────────────────────────────── */
 
+/*
+  The request has to be checked before it leaves the browser.
+
+  A Server Action body over the configured limit is rejected by the
+  framework before any of our code runs — there is no action to return a
+  message from, so it lands on the error page with nothing to explain
+  it. Since every selected file travels in one request, the *total* is
+  what matters, not just the largest file.
+*/
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+
+function describeTooLarge(files: File[]): string | null {
+  const total = files.reduce((sum, file) => sum + file.size, 0);
+  if (total <= MAX_REQUEST_BYTES) return null;
+
+  // One file over the ceiling is a different problem from several that
+  // add up to it, and the way out of each is different too.
+  const oversized = files.find((file) => file.size > MAX_REQUEST_BYTES);
+  if (oversized) {
+    return `${oversized.name} is ${megabytes(oversized.size)}. Images need to be under 4 MB — export a smaller version.`;
+  }
+
+  return `Those ${files.length} images come to ${megabytes(total)} and upload in one go. Add them a few at a time.`;
+}
+
+function megabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function PhotosStep({ studio }: { studio: StudioDetail }) {
   const [state, action] = useActionState<Result, FormData>(uploadImages as Action, null);
+  const [tooLarge, setTooLarge] = useState<string | null>(null);
   const error = errorOf(state);
 
   return (
@@ -423,12 +453,19 @@ export function PhotosStep({ studio }: { studio: StudioDetail }) {
         </ul>
       )}
 
-      <form action={action} className="rounded-[--radius] border border-line-soft bg-surface p-5">
+      <form
+        action={action}
+        onSubmit={(event) => {
+          // Refuse here rather than let the framework drop the request.
+          if (tooLarge) event.preventDefault();
+        }}
+        className="rounded-[--radius] border border-line-soft bg-surface p-5"
+      >
         <Field
           label="Add photographs"
           htmlFor="images"
-          hint="JPEG, PNG or WebP, up to 8 MB each. Twelve maximum."
-          error={pick(error, 'images')}
+          hint="JPEG, PNG or WebP, up to 4 MB per upload. Twelve images maximum."
+          error={tooLarge ?? pick(error, 'images')}
         >
           <input
             id="images"
@@ -437,12 +474,15 @@ export function PhotosStep({ studio }: { studio: StudioDetail }) {
             accept="image/jpeg,image/png,image/webp,image/avif"
             multiple
             required
+            onChange={(event) =>
+              setTooLarge(describeTooLarge(Array.from(event.target.files ?? [])))
+            }
             className="field file:mr-3 file:rounded-[--radius-xs] file:border-0 file:bg-ink file:px-3 file:py-1.5 file:text-sm file:text-paper"
           />
         </Field>
 
         {error && !error.field ? <ErrorBanner message={error.error} /> : null}
-        <Submit label="Upload" variant="secondary" className="mt-4" />
+        <Submit label="Upload" variant="secondary" className="mt-4" disabled={tooLarge !== null} />
       </form>
 
       {studio.images.length > 0 ? (
@@ -671,15 +711,24 @@ function Submit({
   variant = 'primary',
   size = 'md',
   className,
+  disabled = false,
 }: {
   label: string;
   variant?: 'primary' | 'secondary';
   size?: 'md' | 'lg';
   className?: string;
+  /** Held shut by the step itself — a selection it already knows is invalid. */
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant={variant} size={size} disabled={pending} className={className}>
+    <Button
+      type="submit"
+      variant={variant}
+      size={size}
+      disabled={pending || disabled}
+      className={className}
+    >
       {pending ? 'Saving…' : label}
     </Button>
   );
