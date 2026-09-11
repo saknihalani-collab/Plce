@@ -74,15 +74,7 @@ export class SupabaseAuthGateway implements AuthGateway {
       },
     });
 
-    if (error) {
-      const code = error.message.toLowerCase().includes('already') ? 'email_taken' : 'unavailable';
-      throw new AuthError(
-        code === 'email_taken'
-          ? 'An account with that email already exists.'
-          : 'We could not create that account. Please try again.',
-        code,
-      );
-    }
+    if (error) throw signUpFailure(error);
     if (!data.user) {
       throw new AuthError('We could not create that account. Please try again.', 'unavailable');
     }
@@ -128,4 +120,63 @@ export class SupabaseAuthGateway implements AuthGateway {
 function isUnconfirmedEmail(error: { code?: string; message?: string }): boolean {
   if (error.code === 'email_not_confirmed') return true;
   return /email not confirmed/i.test(error.message ?? '');
+}
+
+/**
+ * Turns a Supabase sign-up refusal into something a person can act on.
+ *
+ * The previous version tested the message for "already" and called
+ * everything else "We could not create that account. Please try again." —
+ * advice that is wrong for every cause except a transient one. Somebody
+ * hitting the shared mail quota was told to retry, which consumed
+ * another attempt; somebody whose trigger was failing was told the same
+ * thing forever.
+ *
+ * The real message is always logged. It is not always shown: "Database
+ * error saving new user" means something is wrong with our schema, and
+ * that is an operator's problem, not a visitor's.
+ */
+function signUpFailure(error: { message: string; status?: number; code?: string }): AuthError {
+  console.error(
+    '[auth] signUp failed',
+    JSON.stringify({ status: error.status, code: error.code, message: error.message }),
+  );
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes('already') || error.code === 'user_already_exists') {
+    return new AuthError('An account with that email already exists.', 'email_taken');
+  }
+
+  if (message.includes('password')) {
+    return new AuthError(
+      'That password was rejected. Try a longer one.',
+      'weak_password',
+    );
+  }
+
+  /*
+    Supabase's built-in mail sender allows only a few messages an hour.
+    It is the likeliest reason sign-up starts failing on a project that
+    was working an hour ago, and the only useful response is to wait —
+    so say that rather than inviting a retry that spends another slot.
+  */
+  if (
+    error.status === 429 ||
+    message.includes('rate limit') ||
+    message.includes('for security purposes')
+  ) {
+    return new AuthError(
+      'Too many sign-up attempts just now. Wait a few minutes and try again.',
+      'unavailable',
+    );
+  }
+
+  if (message.includes('signups not allowed') || message.includes('signup is disabled')) {
+    return new AuthError('New accounts are closed at the moment.', 'forbidden');
+  }
+
+  // "Database error saving new user" lands here: a trigger on
+  // `auth.users` raised. The log line above carries the detail.
+  return new AuthError('We could not create that account. Please try again.', 'unavailable');
 }

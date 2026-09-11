@@ -139,6 +139,62 @@ describe('sign up', () => {
   });
 });
 
+describe('sign up failures', () => {
+  const failWith = (error: Record<string, unknown>) =>
+    make(gatewayWith(null, { data: { user: null }, error }));
+
+  const attempt = (gateway: ReturnType<typeof make>) =>
+    gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' });
+
+  it('names the shared mail quota instead of advising a retry', async () => {
+    // The retry advice was actively harmful here: each attempt consumed
+    // another slot against the limit that was already the problem.
+    await expect(attempt(failWith({ status: 429, message: 'email rate limit exceeded' })))
+      .rejects.toThrow(/wait a few minutes/i);
+  });
+
+  it('recognises the throttle by message when there is no status', async () => {
+    await expect(
+      attempt(failWith({ message: 'For security purposes, you can only request this after 51s' })),
+    ).rejects.toThrow(/wait a few minutes/i);
+  });
+
+  it('reports a rejected password as such, not as a generic failure', async () => {
+    await expect(attempt(failWith({ message: 'Password should be at least 6 characters' })))
+      .rejects.toMatchObject({ code: 'weak_password' });
+  });
+
+  it('still reports a duplicate address as email_taken', async () => {
+    await expect(attempt(failWith({ message: 'User already registered' })))
+      .rejects.toMatchObject({ code: 'email_taken' });
+  });
+
+  it('recognises a duplicate by code as well as by message', async () => {
+    await expect(attempt(failWith({ code: 'user_already_exists', message: 'nope' })))
+      .rejects.toMatchObject({ code: 'email_taken' });
+  });
+
+  it('says so plainly when signups are closed', async () => {
+    await expect(attempt(failWith({ message: 'Signups not allowed for this instance' })))
+      .rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('keeps a trigger failure generic to the visitor but logged for us', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(attempt(failWith({ status: 500, message: 'Database error saving new user' })))
+      .rejects.toThrow(/could not create that account/i);
+
+    // The detail an operator needs must reach the log even though the
+    // visitor is told nothing about our schema.
+    expect(spy).toHaveBeenCalledWith(
+      '[auth] signUp failed',
+      expect.stringContaining('Database error saving new user'),
+    );
+    spy.mockRestore();
+  });
+});
+
 describe('resend confirmation', () => {
   it('sends a signup confirmation pointed at this deployment', async () => {
     const client = {
