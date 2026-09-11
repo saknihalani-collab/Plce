@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { AuthError, type AuthGateway, type SignUpInput } from '@/lib/auth/gateway';
+import {
+  AuthError,
+  type AuthGateway,
+  type SignUpInput,
+  type SignUpResult,
+} from '@/lib/auth/gateway';
 import { clearDemoSession, readDemoSession, writeDemoSession } from '@/lib/auth/cookies';
 import { DemoRepository } from '@/lib/data/demo/repository';
 
@@ -44,7 +49,7 @@ export class DemoAuthGateway implements AuthGateway {
     return user.id;
   }
 
-  async signUp(input: SignUpInput): Promise<string> {
+  async signUp(input: SignUpInput): Promise<SignUpResult> {
     if (input.password.trim().length < 6) {
       throw new AuthError('Passwords are at least 6 characters.', 'weak_password');
     }
@@ -61,7 +66,10 @@ export class DemoAuthGateway implements AuthGateway {
     });
 
     await writeDemoSession(user.id);
-    return user.id;
+
+    // No mail is sent in demo mode, so there is nothing to confirm and
+    // the session is issued immediately.
+    return { userId: user.id, needsEmailConfirmation: false };
   }
 
   async signOut(): Promise<void> {

@@ -6,13 +6,27 @@ import { useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
-import { signIn, signUp } from '@/features/auth/actions';
+import { signIn, signUp, type AuthPending } from '@/features/auth/actions';
 import type { ActionResult } from '@/lib/action-result';
 
 export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next?: string }) {
   const action = mode === 'sign-in' ? signIn : signUp;
-  const [state, submit] = useActionState<ActionResult<null> | null, FormData>(action, null);
+  const [state, submit] = useActionState<ActionResult<AuthPending> | null, FormData>(
+    action,
+    null,
+  );
   const error = state && !state.ok ? state : null;
+
+  /*
+    Signing up does not always sign you in. When the address has to be
+    confirmed there is no session to redirect with, so the form stays
+    where it is and says what happened — the alternative is bouncing
+    someone into a login that will reject them for a reason nothing on
+    screen explains.
+  */
+  if (state?.ok && state.data?.awaitingConfirmation) {
+    return <ConfirmEmailNotice email={state.data.email} next={next} />;
+  }
 
   return (
     <form action={submit} className="space-y-5">
@@ -97,6 +111,32 @@ export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next?: s
         )}
       </p>
     </form>
+  );
+}
+
+/** The one thing left to do, and where to do it. */
+function ConfirmEmailNotice({ email, next }: { email: string; next?: string }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="display display-md text-ink">Check your email.</h2>
+        <p className="lede mt-4 text-base">
+          We have sent a confirmation link to <span className="text-ink">{email}</span>. Open it
+          to finish setting up your account.
+        </p>
+      </div>
+
+      <p className="rounded-[--radius-sm] border border-line bg-stone/50 px-4 py-3 text-sm leading-relaxed text-ink-muted">
+        Your account exists, but you cannot sign in until the address is confirmed. If the email
+        has not arrived in a few minutes, check your spam folder.
+      </p>
+
+      <Button asChild size="lg" full variant="secondary">
+        <Link href={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}>
+          Back to sign in
+        </Link>
+      </Button>
+    </div>
   );
 }
 

@@ -1,0 +1,121 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { AuthError } from '@/lib/auth/gateway';
+
+/**
+ * Auth failures have to stay distinguishable.
+ *
+ * Flattening every Supabase error into "email and password do not match"
+ * once cost a real investigation: an admin account that existed, had the
+ * right password and the right role could not sign in, and the only
+ * message on screen pointed at the one thing that was fine. These pin
+ * the two cases apart.
+ */
+
+function gatewayWith(signInResult: unknown, signUpResult?: unknown) {
+  return {
+    auth: {
+      signInWithPassword: vi.fn().mockResolvedValue(signInResult),
+      signUp: vi.fn().mockResolvedValue(signUpResult),
+    },
+  };
+}
+
+const { SupabaseAuthGateway } = await import('@/lib/auth/supabase-gateway');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const make = (client: unknown) => new SupabaseAuthGateway(client as any);
+
+describe('sign in', () => {
+  it('reports an unconfirmed address as such, by error code', async () => {
+    const gateway = make(
+      gatewayWith({ data: { user: null }, error: { code: 'email_not_confirmed', message: 'x' } }),
+    );
+
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toMatchObject({
+      code: 'email_not_confirmed',
+    });
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toThrow(/confirm your email/i);
+  });
+
+  it('also detects it from the message when no code is present', async () => {
+    const gateway = make(
+      gatewayWith({ data: { user: null }, error: { message: 'Email not confirmed' } }),
+    );
+
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toMatchObject({
+      code: 'email_not_confirmed',
+    });
+  });
+
+  it('still reports a genuinely wrong password as invalid credentials', async () => {
+    const gateway = make(
+      gatewayWith({
+        data: { user: null },
+        error: { code: 'invalid_credentials', message: 'Invalid login credentials' },
+      }),
+    );
+
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toMatchObject({
+      code: 'invalid_credentials',
+    });
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toThrow(/do not match/i);
+  });
+
+  it('does not mistake an unrelated failure for an unconfirmed address', async () => {
+    const gateway = make(
+      gatewayWith({ data: { user: null }, error: { message: 'network unreachable' } }),
+    );
+
+    await expect(gateway.signIn('a@b.com', 'pw')).rejects.toMatchObject({
+      code: 'invalid_credentials',
+    });
+  });
+
+  it('returns the user id on success', async () => {
+    const gateway = make(gatewayWith({ data: { user: { id: 'usr_1' } }, error: null }));
+    await expect(gateway.signIn('a@b.com', 'pw')).resolves.toBe('usr_1');
+  });
+});
+
+describe('sign up', () => {
+  it('flags confirmation required when a user comes back without a session', async () => {
+    const gateway = make(
+      gatewayWith(null, { data: { user: { id: 'usr_2' }, session: null }, error: null }),
+    );
+
+    await expect(
+      gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' }),
+    ).resolves.toEqual({ userId: 'usr_2', needsEmailConfirmation: true });
+  });
+
+  it('does not flag it when a session is issued', async () => {
+    const gateway = make(
+      gatewayWith(null, {
+        data: { user: { id: 'usr_3' }, session: { access_token: 'redacted' } },
+        error: null,
+      }),
+    );
+
+    await expect(
+      gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' }),
+    ).resolves.toEqual({ userId: 'usr_3', needsEmailConfirmation: false });
+  });
+
+  it('still raises a duplicate address as email_taken', async () => {
+    const gateway = make(
+      gatewayWith(null, { data: { user: null }, error: { message: 'User already registered' } }),
+    );
+
+    await expect(
+      gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' }),
+    ).rejects.toMatchObject({ code: 'email_taken' });
+  });
+});
+
+describe('error codes', () => {
+  it('keeps the two cases distinguishable to callers', () => {
+    const unconfirmed = new AuthError('x', 'email_not_confirmed');
+    const wrongPassword = new AuthError('y', 'invalid_credentials');
+    expect(unconfirmed.code).not.toBe(wrongPassword.code);
+  });
+});

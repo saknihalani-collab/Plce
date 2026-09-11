@@ -13,6 +13,13 @@
 
 export type AuthErrorCode =
   | 'invalid_credentials'
+  /**
+   * The credentials were right but the address has never been confirmed.
+   * Deliberately distinct from `invalid_credentials`: telling someone
+   * their password is wrong when it is not sends them to reset a
+   * password that was never the problem.
+   */
+  | 'email_not_confirmed'
   | 'not_authenticated'
   | 'email_taken'
   | 'weak_password'
@@ -37,11 +44,25 @@ export interface SignUpInput {
   phone?: string | null;
 }
 
+/**
+ * The outcome of creating an account.
+ *
+ * Signing up does not always sign you in. When a provider requires the
+ * address to be confirmed it creates the user and withholds the session,
+ * and the caller has to be able to tell the difference — otherwise it
+ * redirects into the product as though authenticated and the person
+ * bounces straight back to a login they cannot pass.
+ */
+export interface SignUpResult {
+  userId: string;
+  needsEmailConfirmation: boolean;
+}
+
 export interface AuthGateway {
   /** The signed-in user's id, or null. Never throws for anonymous. */
   currentUserId(): Promise<string | null>;
   /** Returns the user id on success. */
   signIn(email: string, password: string): Promise<string>;
-  signUp(input: SignUpInput): Promise<string>;
+  signUp(input: SignUpInput): Promise<SignUpResult>;
   signOut(): Promise<void>;
 }

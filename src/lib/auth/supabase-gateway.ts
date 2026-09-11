@@ -2,7 +2,12 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { AuthError, type AuthGateway, type SignUpInput } from '@/lib/auth/gateway';
+import {
+  AuthError,
+  type AuthGateway,
+  type SignUpInput,
+  type SignUpResult,
+} from '@/lib/auth/gateway';
 
 /**
  * Supabase Auth, behind the gateway interface.
@@ -28,12 +33,26 @@ export class SupabaseAuthGateway implements AuthGateway {
     });
 
     if (error || !data.user) {
+      /*
+        Not every refusal is a wrong password, and saying so when it is
+        not is actively harmful: it sends someone to reset a password
+        that already works, and hides the one action that would let them
+        in. An address that has never been confirmed is the common case
+        and gets its own message.
+      */
+      if (error && isUnconfirmedEmail(error)) {
+        throw new AuthError(
+          'Please confirm your email address first. Check your inbox.',
+          'email_not_confirmed',
+        );
+      }
+
       throw new AuthError('That email and password do not match.', 'invalid_credentials');
     }
     return data.user.id;
   }
 
-  async signUp(input: SignUpInput): Promise<string> {
+  async signUp(input: SignUpInput): Promise<SignUpResult> {
     const { data, error } = await this.client.auth.signUp({
       email: input.email.trim().toLowerCase(),
       password: input.password,
@@ -56,10 +75,29 @@ export class SupabaseAuthGateway implements AuthGateway {
       throw new AuthError('We could not create that account. Please try again.', 'unavailable');
     }
 
-    return data.user.id;
+    /*
+      A user with no session means the project requires the address to be
+      confirmed. The account exists — the database trigger has already
+      mirrored it into `users` — but nobody is signed in, so the caller
+      must not treat this as a completed sign-up.
+    */
+    return { userId: data.user.id, needsEmailConfirmation: !data.session };
   }
 
   async signOut(): Promise<void> {
     await this.client.auth.signOut();
   }
+}
+
+/**
+ * Whether a Supabase sign-in failure was an unconfirmed address.
+ *
+ * Checked by code first, since that is the stable contract, with a
+ * message match behind it — the field has not always been populated
+ * across supabase-js versions, and misreading this as a bad password is
+ * exactly the failure this function exists to prevent.
+ */
+function isUnconfirmedEmail(error: { code?: string; message?: string }): boolean {
+  if (error.code === 'email_not_confirmed') return true;
+  return /email not confirmed/i.test(error.message ?? '');
 }

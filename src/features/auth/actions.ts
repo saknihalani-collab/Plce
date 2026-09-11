@@ -29,10 +29,20 @@ const signUpSchema = credentials.extend({
   phone: z.string().trim().max(20).optional(),
 });
 
+/**
+ * What the login and signup forms render besides an error.
+ *
+ * `null` is the ordinary case — both actions redirect on success, so the
+ * form only ever sees this when something is left to say. Today that is
+ * one thing: the account exists but the address has to be confirmed
+ * before it can be used.
+ */
+export type AuthPending = { awaitingConfirmation: true; email: string } | null;
+
 export async function signIn(
-  _previous: ActionResult<null> | null,
+  _previous: ActionResult<AuthPending> | null,
   formData: FormData,
-): Promise<ActionResult<null>> {
+): Promise<ActionResult<AuthPending>> {
   let destination: string | null = null;
 
   const result = await runAction(async () => {
@@ -51,9 +61,9 @@ export async function signIn(
 }
 
 export async function signUp(
-  _previous: ActionResult<null> | null,
+  _previous: ActionResult<AuthPending> | null,
   formData: FormData,
-): Promise<ActionResult<null>> {
+): Promise<ActionResult<AuthPending>> {
   let destination: string | null = null;
 
   const result = await runAction(async () => {
@@ -61,12 +71,23 @@ export async function signUp(
     if (!parsed.success) return fromZodError(parsed.error);
 
     const gateway = await getAuthGateway();
-    const userId = await gateway.signUp({
+    const { userId, needsEmailConfirmation } = await gateway.signUp({
       email: parsed.data.email,
       password: parsed.data.password,
       fullName: parsed.data.fullName,
       phone: parsed.data.phone || null,
     });
+
+    /*
+      No session means the address has to be confirmed first. Redirecting
+      here would drop someone into the product unauthenticated, bounce
+      them to the login they cannot yet pass, and tell them their
+      password was wrong — which is precisely how a working account looks
+      broken.
+    */
+    if (needsEmailConfirmation) {
+      return ok({ awaitingConfirmation: true as const, email: parsed.data.email });
+    }
 
     destination = await landingFor(userId, parsed.data.next);
     return ok(null);

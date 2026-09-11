@@ -89,6 +89,7 @@ supabase/migrations/0003_views.sql      aggregate views for discovery and the CR
 supabase/migrations/0004_taxonomy.sql   starting categories and amenities
 supabase/migrations/0005_whatsapp_provenance.sql   booking-event and message provenance
 supabase/migrations/0006_whatsapp_verification.sql WhatsApp number verification, message idempotency
+supabase/migrations/0007_whatsapp_verification_guard.sql  no client key may write verified_at
 ```
 
 The moment credentials are present, `lib/data/index.ts` swaps the
