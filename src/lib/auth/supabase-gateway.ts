@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { absoluteUrl } from '@/lib/site-url';
 import {
   AuthError,
   type AuthGateway,
@@ -53,10 +54,21 @@ export class SupabaseAuthGateway implements AuthGateway {
   }
 
   async signUp(input: SignUpInput): Promise<SignUpResult> {
+    /*
+      Without an explicit redirect, Supabase falls back to the Site URL
+      configured in its own dashboard — which on a new project is
+      `http://localhost:3000`. That is how a confirmation email sent from
+      production ends up pointing at a machine the recipient does not
+      have. Naming the destination here means the deployment decides,
+      not a dashboard field nobody remembers changing.
+    */
+    const emailRedirectTo = await absoluteUrl('/auth/callback');
+
     const { data, error } = await this.client.auth.signUp({
       email: input.email.trim().toLowerCase(),
       password: input.password,
       options: {
+        emailRedirectTo,
         // Read by the `handle_new_user` trigger to populate `users`.
         data: { full_name: input.fullName.trim(), phone: input.phone ?? null },
       },

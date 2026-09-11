@@ -12,6 +12,19 @@ import { AuthError } from '@/lib/auth/gateway';
  * the two cases apart.
  */
 
+// `signUp` resolves its confirmation redirect from the request origin,
+// which needs a request to exist.
+vi.mock('next/headers', () => ({
+  headers: async () => ({
+    get: (name: string) =>
+      name.toLowerCase() === 'x-forwarded-host'
+        ? 'www.findplce.com'
+        : name.toLowerCase() === 'x-forwarded-proto'
+          ? 'https'
+          : null,
+  }),
+}));
+
 function gatewayWith(signInResult: unknown, signUpResult?: unknown) {
   return {
     auth: {
@@ -99,6 +112,20 @@ describe('sign up', () => {
     await expect(
       gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' }),
     ).resolves.toEqual({ userId: 'usr_3', needsEmailConfirmation: false });
+  });
+
+  it('points the confirmation email at this deployment, not localhost', async () => {
+    const client = gatewayWith(null, {
+      data: { user: { id: 'usr_4' }, session: null },
+      error: null,
+    });
+    const gateway = make(client);
+
+    await gateway.signUp({ email: 'a@b.com', password: 'pw', fullName: 'A' });
+
+    const options = client.auth.signUp.mock.calls[0]![0].options;
+    expect(options.emailRedirectTo).toBe('https://www.findplce.com/auth/callback');
+    expect(options.emailRedirectTo).not.toMatch(/localhost/);
   });
 
   it('still raises a duplicate address as email_taken', async () => {
