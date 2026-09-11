@@ -99,13 +99,34 @@ fake marketplace that resets on every cold start.
 
 ### Deploying
 
-A host needs **either** the two Supabase variables **or**
-`ALLOW_DEMO_MODE=true`. With neither, every request fails and the reason
-is written to the server log:
+**As it stands, this repository deploys as a demo.** `.env.production`
+commits `ALLOW_DEMO_MODE=true`, so a host needs no configuration at all
+and the site comes up against the seeded in-memory marketplace.
 
-```
-PL·CE is running a production build without Supabase credentials…
-```
+That data lives in the server's memory: it resets on every cold start,
+and on a serverless host each instance keeps its own copy. Good for a
+link someone clicks to look around; wrong for anything whose data is
+meant to survive.
+
+**To go live:** delete `.env.production`, set the two Supabase variables
+on the host, and run the migrations. `NEXT_PUBLIC_*` variables are
+inlined at build time, so they have to exist *before* the build — not
+just at run time — and a host that already built without them needs a
+redeploy, not a restart.
+
+Three failure modes, all deliberate:
+
+| Configuration | Result |
+|---|---|
+| Both Supabase variables | Live. Postgres, RLS, the lot. |
+| Neither, `ALLOW_DEMO_MODE=true` | Demo marketplace. The current default. |
+| Neither, no flag | Every request 500s; the log says which variables to set. |
+| **Exactly one of the two** | **Always 500s, flag or no flag.** |
+
+That last row is the one that matters once a demo flag is committed: one
+variable set and the other missing is what a misspelled variable *name*
+looks like, and `ALLOW_DEMO_MODE` is not allowed to excuse it. The error
+names which half is missing.
 
 The build itself needs nothing — `NEXT_PHASE` tells the guard it is
 compiling, which is why CI and the host's build step both pass without

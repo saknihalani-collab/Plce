@@ -89,6 +89,35 @@ export function assertNotAccidentalDemoMode(): void {
   // inject variables at build *and* run time. Only a live server serving
   // requests is a real problem.
   if (process.env.NEXT_PHASE === 'phase-production-build') return;
+
+  /*
+    Half-configured beats no-configured, and `ALLOW_DEMO_MODE` must never
+    excuse it.
+
+    One Supabase variable set and the other missing is what a misspelled
+    variable *name* looks like from in here — someone meant to go live
+    and typed `NEXT_PUBLIC_SUPABSE_URL`. With a demo flag committed to
+    the repository, that would otherwise sail through and quietly serve
+    the in-memory marketplace to real customers, which is precisely the
+    accident this whole function exists to prevent.
+
+    Nobody deliberately configures exactly one of a pair, so there is no
+    legitimate case to keep working here.
+  */
+  if (Boolean(supabaseUrl) !== Boolean(supabaseAnonKey)) {
+    throw new Error(
+      [
+        'PL·CE has one Supabase variable set and the other missing, so it fell back to',
+        'the in-memory demo marketplace. This is almost always a misspelled variable name.',
+        '',
+        `  NEXT_PUBLIC_SUPABASE_URL       ${supabaseUrl ? 'set' : 'MISSING'}`,
+        `  NEXT_PUBLIC_SUPABASE_ANON_KEY  ${supabaseAnonKey ? 'set' : 'MISSING'}`,
+        '',
+        'Set both to go live, or unset both to run as a demo.',
+      ].join('\n'),
+    );
+  }
+
   if (process.env.ALLOW_DEMO_MODE === 'true') return;
 
   throw new Error(

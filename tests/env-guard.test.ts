@@ -85,6 +85,46 @@ describe('demo-mode guard', () => {
     expect(() => env.assertNotAccidentalDemoMode()).not.toThrow();
   });
 
+  it('refuses a half-configured deployment even with the demo flag set', async () => {
+    // The realistic way to get here is a misspelled variable name, and
+    // it must not be excusable by a flag committed to the repository.
+    const env = await loadGuard({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined,
+      ALLOW_DEMO_MODE: 'true',
+      NEXT_PHASE: undefined,
+    });
+
+    expect(() => env.assertNotAccidentalDemoMode()).toThrow(/one Supabase variable set/);
+  });
+
+  it('refuses the mirror image of that too', async () => {
+    const env = await loadGuard({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SUPABASE_URL: undefined,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key',
+      ALLOW_DEMO_MODE: 'true',
+      NEXT_PHASE: undefined,
+    });
+
+    expect(() => env.assertNotAccidentalDemoMode()).toThrow(/one Supabase variable set/);
+  });
+
+  it('names which half is missing, so the typo is findable', async () => {
+    const env = await loadGuard({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined,
+      ALLOW_DEMO_MODE: undefined,
+      NEXT_PHASE: undefined,
+    });
+
+    expect(() => env.assertNotAccidentalDemoMode()).toThrow(
+      /NEXT_PUBLIC_SUPABASE_ANON_KEY\s+MISSING/,
+    );
+  });
+
   it('stays quiet when Supabase is configured', async () => {
     const env = await loadGuard({
       NODE_ENV: 'production',
