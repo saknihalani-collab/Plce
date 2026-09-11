@@ -50,7 +50,23 @@ export async function signIn(
     if (!parsed.success) return fromZodError(parsed.error);
 
     const gateway = await getAuthGateway();
-    const userId = await gateway.signIn(parsed.data.email, parsed.data.password);
+
+    let userId: string;
+    try {
+      userId = await gateway.signIn(parsed.data.email, parsed.data.password);
+    } catch (error) {
+      /*
+        An unconfirmed address is not a failed login, it is an unfinished
+        one — the credentials were right. Showing it as a red error next
+        to a password field invites people to change a password that
+        works. The form gets the same "check your email" panel sign-up
+        uses, which is also where the resend button lives.
+      */
+      if (error instanceof AuthError && error.code === 'email_not_confirmed') {
+        return ok({ awaitingConfirmation: true as const, email: parsed.data.email });
+      }
+      throw error;
+    }
 
     destination = await landingFor(userId, parsed.data.next);
     return ok(null);
@@ -111,6 +127,29 @@ export async function signOut(): Promise<void> {
  * Guarded at the top rather than by hiding the button, because a
  * dev-only affordance that is merely invisible is not guarded at all.
  */
+/**
+ * Sends the confirmation email again.
+ *
+ * Unauthenticated by necessity — the person cannot sign in yet, which is
+ * the whole problem. It therefore reports the same success whatever
+ * happened, so it cannot be used to discover which addresses have
+ * accounts. Supabase rate-limits the underlying send.
+ */
+export async function resendConfirmation(
+  _previous: ActionResult<null> | null,
+  formData: FormData,
+): Promise<ActionResult<null>> {
+  return runAction(async () => {
+    const email = String(formData.get('email') ?? '').trim();
+    if (!email) return fail('Enter your email address first.', 'email');
+
+    const gateway = await getAuthGateway();
+    await gateway.resendConfirmation(email);
+
+    return ok(null);
+  });
+}
+
 export async function signInAsDemoUser(email: string): Promise<void> {
   if (!isDemoMode) {
     throw new AuthError('Demo sign-in is not available here.', 'forbidden');

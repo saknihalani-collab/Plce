@@ -72,6 +72,11 @@ export class DemoAuthGateway implements AuthGateway {
     return { userId: user.id, needsEmailConfirmation: false };
   }
 
+  async resendConfirmation(): Promise<void> {
+    // Demo mode sends no mail and confirms nothing, so there is nothing
+    // to resend. Succeeding silently keeps the caller identical.
+  }
+
   async signOut(): Promise<void> {
     await clearDemoSession();
   }

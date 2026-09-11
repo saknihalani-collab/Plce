@@ -96,6 +96,22 @@ export class SupabaseAuthGateway implements AuthGateway {
     return { userId: data.user.id, needsEmailConfirmation: !data.session };
   }
 
+  async resendConfirmation(email: string): Promise<void> {
+    const { error } = await this.client.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+      // The same destination sign-up uses, so a resent link behaves
+      // exactly like the original rather than falling back to whatever
+      // the dashboard's Site URL happens to say.
+      options: { emailRedirectTo: await absoluteUrl('/auth/callback') },
+    });
+
+    // Logged, never surfaced. "Already confirmed" and "no such user" are
+    // both answers worth having in a log and not worth handing to
+    // someone probing the form.
+    if (error) console.error('[auth] resend confirmation failed', error.message);
+  }
+
   async signOut(): Promise<void> {
     await this.client.auth.signOut();
   }

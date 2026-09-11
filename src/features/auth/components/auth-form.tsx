@@ -6,7 +6,12 @@ import { useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
-import { signIn, signUp, type AuthPending } from '@/features/auth/actions';
+import {
+  resendConfirmation,
+  signIn,
+  signUp,
+  type AuthPending,
+} from '@/features/auth/actions';
 import type { ActionResult } from '@/lib/action-result';
 
 export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next?: string }) {
@@ -131,12 +136,59 @@ function ConfirmEmailNotice({ email, next }: { email: string; next?: string }) {
         has not arrived in a few minutes, check your spam folder.
       </p>
 
+      <ResendConfirmation email={email} />
+
       <Button asChild size="lg" full variant="secondary">
         <Link href={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}>
           Back to sign in
         </Link>
       </Button>
     </div>
+  );
+}
+
+/**
+ * A second chance at the link.
+ *
+ * The first email expires, gets filed as spam, or is opened on a phone
+ * that is not the machine someone wants to work on — and a confirmation
+ * flow with no way to ask again is a dead end that ends in a support
+ * message. Sent state is kept locally rather than re-rendering the
+ * panel, so the address stays on screen.
+ */
+function ResendConfirmation({ email }: { email: string }) {
+  const [state, submit] = useActionState<ActionResult<null> | null, FormData>(
+    resendConfirmation as (previous: ActionResult<null> | null, formData: FormData) => Promise<ActionResult<null>>,
+    null,
+  );
+
+  if (state?.ok) {
+    return (
+      <p className="text-sm text-olive-ink" role="status">
+        Sent. Give it a minute, then check your inbox and spam folder.
+      </p>
+    );
+  }
+
+  return (
+    <form action={submit}>
+      <input type="hidden" name="email" value={email} />
+      {state && !state.ok ? (
+        <p className="mb-2 text-sm text-alert-ink" role="alert">
+          {state.error}
+        </p>
+      ) : null}
+      <ResendButton />
+    </form>
+  );
+}
+
+function ResendButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" variant="ghost" size="sm" disabled={pending}>
+      {pending ? 'Sending…' : 'Resend confirmation email'}
+    </Button>
   );
 }
 

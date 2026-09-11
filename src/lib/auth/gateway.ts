@@ -64,5 +64,14 @@ export interface AuthGateway {
   /** Returns the user id on success. */
   signIn(email: string, password: string): Promise<string>;
   signUp(input: SignUpInput): Promise<SignUpResult>;
+  /**
+   * Sends the confirmation email again.
+   *
+   * Deliberately silent about whether the address exists or was already
+   * confirmed: this is reachable without signing in, and an endpoint
+   * that answers "no such account" is an endpoint for enumerating
+   * accounts.
+   */
+  resendConfirmation(email: string): Promise<void>;
   signOut(): Promise<void>;
 }

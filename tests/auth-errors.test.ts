@@ -139,6 +139,37 @@ describe('sign up', () => {
   });
 });
 
+describe('resend confirmation', () => {
+  it('sends a signup confirmation pointed at this deployment', async () => {
+    const client = {
+      auth: { resend: vi.fn().mockResolvedValue({ error: null }) },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gateway = new SupabaseAuthGateway(client as any);
+
+    await gateway.resendConfirmation('  PlceEHQ@Gmail.com  ');
+
+    const arg = client.auth.resend.mock.calls[0]![0];
+    expect(arg.type).toBe('signup');
+    expect(arg.email).toBe('plceehq@gmail.com');
+    expect(arg.options.emailRedirectTo).toBe('https://www.findplce.com/auth/callback');
+  });
+
+  it('stays silent when the address is unknown, so it cannot enumerate accounts', async () => {
+    const client = {
+      auth: {
+        resend: vi.fn().mockResolvedValue({ error: { message: 'User not found' } }),
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gateway = new SupabaseAuthGateway(client as any);
+
+    // Resolves rather than throwing: the caller cannot tell the
+    // difference between a sent mail and a missing account.
+    await expect(gateway.resendConfirmation('nobody@example.com')).resolves.toBeUndefined();
+  });
+});
+
 describe('error codes', () => {
   it('keeps the two cases distinguishable to callers', () => {
     const unconfirmed = new AuthError('x', 'email_not_confirmed');
