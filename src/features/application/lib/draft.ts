@@ -53,3 +53,46 @@ export async function requireDraft(): Promise<DraftContext> {
 
   return { repository, session, ...draft };
 }
+
+/**
+ * An organisation left behind by an attempt that did not finish.
+ *
+ * Creating a listing takes several writes — organisation, membership,
+ * studio, application — and they are not one transaction. If the
+ * database times out in the middle, the earlier rows survive and the
+ * later ones never happen.
+ *
+ * `findDraft` cannot see that state, because it only recognises a studio
+ * that already has an application. So a retry looked like a first
+ * attempt and built a *second* organisation, and every timeout left
+ * another one behind.
+ *
+ * This finds the wreckage instead: an organisation this person owns with
+ * no finished listing in it. Reusing it makes the step safe to retry as
+ * many times as the network demands.
+ */
+export async function findUnfinished(
+  repository: DataRepository,
+  session: Session,
+): Promise<{ organizationId: string; studio: StudioDetail | null } | null> {
+  for (const membership of session.memberships) {
+    if (membership.role !== 'owner') continue;
+
+    const studios = await repository.listStudiosForOrganization(membership.organizationId);
+
+    if (studios.length === 0) {
+      // Organisation created, studio never was.
+      return { organizationId: membership.organizationId, studio: null };
+    }
+
+    for (const studio of studios) {
+      const application = await repository.getApplicationForStudio(studio.id);
+      if (!application) {
+        // Studio created, application never was.
+        return { organizationId: membership.organizationId, studio };
+      }
+    }
+  }
+
+  return null;
+}

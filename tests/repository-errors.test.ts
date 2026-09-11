@@ -99,3 +99,16 @@ describe('throwIfError', () => {
     });
   });
 });
+
+describe('gateway timeouts', () => {
+  it('names a timeout, where retrying genuinely is the right advice', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A 504 arrives with no Postgres code: the request never reached the
+    // database, so there is nothing for it to have objected to.
+    expect(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      throwIfError({ code: undefined, message: 'Gateway Timeout', details: '', hint: '' } as any),
+    ).toThrow(/did not answer in time/i);
+    spy.mockRestore();
+  });
+});

@@ -9,7 +9,7 @@ import { writeActiveOrganization } from '@/lib/auth/cookies';
 import { requireSessionOrThrow } from '@/lib/auth/session';
 import { getRepository } from '@/lib/data';
 import { RepositoryError } from '@/lib/data/repository';
-import { findDraft, requireDraft } from '@/features/application/lib/draft';
+import { findDraft, findUnfinished, requireDraft } from '@/features/application/lib/draft';
 import { submitApplication } from '@/lib/listing/service';
 import { getStorageProvider, StorageError } from '@/lib/storage/provider';
 import type { Weekday } from '@/types/domain';
@@ -62,14 +62,36 @@ export async function saveBasics(
         categoryId: input.categoryId,
       });
     } else {
-      // First save: the organisation, the studio and the application row
-      // all come into existence together, because a studio with no
-      // application is a state nothing else in the product understands.
-      const organization = await repository.createOrganization(
-        input.businessName,
-        session.user.id,
-      );
-      const studio = await repository.createStudioDraft(organization.id, {
+      /*
+        First save: the organisation, the studio and the application row
+        all come into existence together, because a studio with no
+        application is a state nothing else in the product understands.
+
+        They are four writes and not one transaction, so a failure
+        halfway leaves some of them behind. Picking those up is what
+        keeps a retry from building a second organisation every time the
+        database has a bad moment.
+      */
+      const unfinished = await findUnfinished(repository, session);
+
+      const organizationId =
+        unfinished?.organizationId ??
+        (await repository.createOrganization(input.businessName, session.user.id)).id;
+
+      if (unfinished?.studio) {
+        await repository.updateStudio(unfinished.studio.id, {
+          name: input.studioName,
+          tagline: input.tagline || null,
+          description: input.description,
+          categoryId: input.categoryId,
+        });
+        await repository.createApplication(organizationId, unfinished.studio.id);
+        await writeActiveOrganization(organizationId);
+        next = '/list-your-studio?step=location';
+        return ok(null);
+      }
+
+      const studio = await repository.createStudioDraft(organizationId, {
         name: input.studioName,
         tagline: input.tagline || null,
         description: input.description,
@@ -86,8 +108,8 @@ export async function saveBasics(
         contactPhone: session.user.phone ?? '',
         contactEmail: session.user.email,
       });
-      await repository.createApplication(organization.id, studio.id);
-      await writeActiveOrganization(organization.id);
+      await repository.createApplication(organizationId, studio.id);
+      await writeActiveOrganization(organizationId);
     }
 
     next = `${WIZARD}?step=location`;

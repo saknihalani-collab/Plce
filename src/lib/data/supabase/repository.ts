@@ -2774,6 +2774,16 @@ function describe(error: PostgrestError): string {
       return 'You do not have permission to do that.';
 
     default:
+      /*
+        A gateway timeout arrives with no Postgres code at all — the
+        request never reached the database, so there is nothing for it to
+        have objected to. Worth naming, because unlike every other case
+        here retrying really is the right advice.
+      */
+      if (/timeout|timed out|gateway/i.test(error.message ?? '')) {
+        return 'The database did not answer in time. Nothing was lost — try that again.';
+      }
+
       return error.code
         ? `We could not save that. (database error ${error.code})`
         : 'We could not reach the database. Please try again.';
