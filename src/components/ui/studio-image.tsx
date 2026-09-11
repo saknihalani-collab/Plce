@@ -47,6 +47,14 @@ export function StudioImage({
     );
   }
 
+  /*
+    Demo uploads are served from one server instance's memory, so the
+    image optimiser's own fetch could land on a different instance and
+    404. Going straight to the bytes removes that hop — and there is no
+    point spending optimisation on an image that disappears on restart.
+  */
+  const ephemeral = src.startsWith('/api/demo-media/');
+
   return (
     <Image
       src={src}
@@ -54,6 +62,7 @@ export function StudioImage({
       fill
       sizes={sizes ?? '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'}
       priority={priority}
+      unoptimized={ephemeral}
       className={cn('object-cover', className)}
       onError={() => setFailed(true)}
     />

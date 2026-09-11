@@ -103,16 +103,41 @@ fake marketplace that resets on every cold start.
 commits `ALLOW_DEMO_MODE=true`, so a host needs no configuration at all
 and the site comes up against the seeded in-memory marketplace.
 
-That data lives in the server's memory: it resets on every cold start,
-and on a serverless host each instance keeps its own copy. Good for a
-link someone clicks to look around; wrong for anything whose data is
-meant to survive.
+That data lives in the server's memory. Three consequences worth knowing
+before handing the link to somebody:
 
-**To go live:** delete `.env.production`, set the two Supabase variables
-on the host, and run the migrations. `NEXT_PUBLIC_*` variables are
-inlined at build time, so they have to exist *before* the build — not
-just at run time — and a host that already built without them needs a
-redeploy, not a restart.
+- It resets on every cold start, so anything created disappears without
+  warning after a quiet spell.
+- Each serverless instance keeps its own copy, so under concurrent use
+  two visitors can disagree about what exists.
+- Uploaded images live in memory too, served by `/api/demo-media/[id]`,
+  and are subject to both of the above.
+
+The seed is deterministic, so the marketplace itself always looks the
+same — it is a visitor's *own changes* that are fragile. Good for a link
+someone clicks to look around; for a demo where the other person will
+create things and expect them to still be there, use a real database.
+
+**Sharing a demo link.** Nothing else is needed in the code — but check
+the host is not gating it. On Vercel that is Settings → Deployment
+Protection; anything other than *Disabled* puts a sign-in wall in front
+of visitors, and preview deployments are protected by default on some
+plans. Share the production URL, not a preview one.
+
+**To go live** — about three minutes, and worth it before showing anyone
+who will click around:
+
+1. Create a Supabase project (the free tier is enough).
+2. SQL Editor → paste `supabase/setup.sql` → Run. That is every
+   migration in order, in one file.
+3. Storage → new **public** bucket named `studio-images`.
+4. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` on
+   the host, and delete `.env.production`.
+5. Redeploy.
+
+`NEXT_PUBLIC_*` variables are inlined at build time, so they have to
+exist *before* the build — a host that already built without them needs
+a redeploy, not a restart.
 
 Three failure modes, all deliberate:
 

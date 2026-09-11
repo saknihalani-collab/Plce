@@ -1,10 +1,9 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 
 import { env, isDemoMode } from '@/lib/env';
+import { putDemoMedia } from '@/lib/storage/demo-media';
 
 /**
  * Image storage.
@@ -13,12 +12,14 @@ import { env, isDemoMode } from '@/lib/env';
  * uploading it has to actually work in both modes:
  *
  *   live — Supabase Storage, public bucket, CDN-backed URL
- *   demo — the local filesystem under `public/uploads`, served by Next
+ *   demo — memory, served back by `/api/demo-media/[id]`
  *
- * The demo path writes real bytes to real files and hands back a real
- * URL. That matters: an upload control that quietly discards the file
- * would make the whole application flow untestable, which is exactly
- * what demo mode exists to prevent.
+ * The demo path keeps real bytes and hands back a real URL. That
+ * matters: an upload control that quietly discarded the file would make
+ * the listing wizard untestable, which is exactly what demo mode exists
+ * to prevent. It deliberately does not touch the filesystem — hosts are
+ * read-only, and an upload that only works on a laptop is not a working
+ * upload.
  */
 
 export interface StoredFile {
@@ -61,18 +62,16 @@ function extensionFor(file: File): string {
   }
 }
 
-class LocalStorageProvider implements StorageProvider {
-  readonly name = 'local';
+class MemoryStorageProvider implements StorageProvider {
+  readonly name = 'memory';
 
   async upload(file: File, prefix: string): Promise<StoredFile> {
     assertUploadable(file);
 
-    const name = `${prefix}-${randomUUID()}.${extensionFor(file)}`;
-    const directory = path.join(process.cwd(), 'public', 'uploads');
-    await mkdir(directory, { recursive: true });
-    await writeFile(path.join(directory, name), Buffer.from(await file.arrayBuffer()));
+    const id = `${prefix}-${randomUUID()}.${extensionFor(file)}`;
+    putDemoMedia(id, file.type, new Uint8Array(await file.arrayBuffer()));
 
-    return { url: `/uploads/${name}`, path: name };
+    return { url: `/api/demo-media/${id}`, path: id };
   }
 }
 
@@ -110,5 +109,5 @@ class SupabaseStorageProvider implements StorageProvider {
 
 export function getStorageProvider(): StorageProvider {
   if (!isDemoMode && env.supabase.url) return new SupabaseStorageProvider(env.supabase.url);
-  return new LocalStorageProvider();
+  return new MemoryStorageProvider();
 }
