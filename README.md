@@ -88,13 +88,28 @@ supabase/migrations/0002_rls.sql        row-level security and the approval guar
 supabase/migrations/0003_views.sql      aggregate views for discovery and the CRM
 supabase/migrations/0004_taxonomy.sql   starting categories and amenities
 supabase/migrations/0005_whatsapp_provenance.sql   booking-event and message provenance
+supabase/migrations/0006_whatsapp_verification.sql WhatsApp number verification, message idempotency
 ```
 
 The moment credentials are present, `lib/data/index.ts` swaps the
-in-memory repository for the Postgres one. A **production build refuses
-to start without credentials** unless `ALLOW_DEMO_MODE=true` — a mistyped
-environment variable should fail loudly, not quietly serve a fake
-marketplace.
+in-memory repository for the Postgres one. A **production deployment
+refuses to serve without credentials** unless `ALLOW_DEMO_MODE=true` — a
+mistyped environment variable should fail loudly, not quietly serve a
+fake marketplace that resets on every cold start.
+
+### Deploying
+
+A host needs **either** the two Supabase variables **or**
+`ALLOW_DEMO_MODE=true`. With neither, every request fails and the reason
+is written to the server log:
+
+```
+PL·CE is running a production build without Supabase credentials…
+```
+
+The build itself needs nothing — `NEXT_PHASE` tells the guard it is
+compiling, which is why CI and the host's build step both pass without
+credentials and only a running server objects.
 
 Create a public storage bucket named `studio-images` for listing
 photography. Without Supabase, uploads are written to `public/uploads`.

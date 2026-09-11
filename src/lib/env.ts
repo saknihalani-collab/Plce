@@ -66,20 +66,31 @@ export const isAiConfigured = Boolean(env.ai.anthropicKey);
  * thought they had made. A mistyped environment variable on the host
  * would do exactly that.
  *
- * So a production build refuses to start in demo mode unless it is asked
- * for explicitly.
+ * So a production deployment refuses to serve data in demo mode unless it
+ * is asked for explicitly.
+ *
+ * This is a function, called from the composition root, rather than a
+ * check that runs when this module is first imported. Module-level
+ * throwing looks tidier and behaves far worse: `env` is also imported by
+ * the Supabase middleware, so on a host with no credentials the failure
+ * landed in edge middleware *before any page rendered*. Every route
+ * returned an opaque `MIDDLEWARE_INVOCATION_FAILED`, and the explanation
+ * below — the one thing that would have made the cause obvious — was
+ * never shown to anybody.
+ *
+ * Failing where the demo repository is actually handed out keeps the
+ * protection identical and puts the message somewhere a person reads it.
  */
-const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+export function assertNotAccidentalDemoMode(): void {
+  if (!isDemoMode) return;
+  if (process.env.NODE_ENV !== 'production') return;
 
-if (
-  isDemoMode &&
-  process.env.NODE_ENV === 'production' &&
   // Compiling without credentials is normal — CI has none, and hosts
   // inject variables at build *and* run time. Only a live server serving
   // requests is a real problem.
-  !isBuildPhase &&
-  process.env.ALLOW_DEMO_MODE !== 'true'
-) {
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
+  if (process.env.ALLOW_DEMO_MODE === 'true') return;
+
   throw new Error(
     [
       'PL·CE is running a production build without Supabase credentials, which would',

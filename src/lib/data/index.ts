@@ -5,7 +5,7 @@ import type { AuthGateway } from '@/lib/auth/gateway';
 import { SupabaseAuthGateway } from '@/lib/auth/supabase-gateway';
 import { DemoRepository } from '@/lib/data/demo/repository';
 import type { DataRepository } from '@/lib/data/repository';
-import { isDemoMode } from '@/lib/env';
+import { assertNotAccidentalDemoMode, isDemoMode } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server';
  */
 
 export async function getRepository(): Promise<DataRepository> {
+  assertNotAccidentalDemoMode();
   if (isDemoMode) return new DemoRepository();
 
   const { SupabaseRepository } = await import('@/lib/data/supabase/repository');
@@ -39,6 +40,7 @@ export async function getRepository(): Promise<DataRepository> {
  * code path.
  */
 export async function getServiceRepository(): Promise<DataRepository> {
+  assertNotAccidentalDemoMode();
   if (isDemoMode) return new DemoRepository();
 
   const [{ SupabaseRepository }, { createServiceClient }] = await Promise.all([
@@ -49,6 +51,7 @@ export async function getServiceRepository(): Promise<DataRepository> {
 }
 
 export async function getAuthGateway(): Promise<AuthGateway> {
+  assertNotAccidentalDemoMode();
   if (isDemoMode) return new DemoAuthGateway();
   return new SupabaseAuthGateway(await createClient());
 }
