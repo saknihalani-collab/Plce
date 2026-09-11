@@ -1,0 +1,127 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+
+import { fail, fromZodError, ok, runAction, type ActionResult } from '@/lib/action-result';
+import { clearDemoSession } from '@/lib/auth/cookies';
+import { AuthError } from '@/lib/auth/gateway';
+import { getAuthGateway, getRepository } from '@/lib/data';
+import { isDemoMode } from '@/lib/env';
+
+/**
+ * Sign in, sign up, sign out.
+ *
+ * The gateway does the credential work; this layer decides where someone
+ * lands afterwards. `next` is checked rather than trusted — an open
+ * redirect on a sign-in form is how phishing links get to look
+ * legitimate.
+ */
+
+const credentials = z.object({
+  email: z.string().trim().email('Enter the email you signed up with'),
+  password: z.string().min(6, 'Passwords are at least 6 characters'),
+  next: z.string().optional(),
+});
+
+const signUpSchema = credentials.extend({
+  fullName: z.string().trim().min(2, 'Tell us your name'),
+  phone: z.string().trim().max(20).optional(),
+});
+
+export async function signIn(
+  _previous: ActionResult<null> | null,
+  formData: FormData,
+): Promise<ActionResult<null>> {
+  let destination: string | null = null;
+
+  const result = await runAction(async () => {
+    const parsed = credentials.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) return fromZodError(parsed.error);
+
+    const gateway = await getAuthGateway();
+    const userId = await gateway.signIn(parsed.data.email, parsed.data.password);
+
+    destination = await landingFor(userId, parsed.data.next);
+    return ok(null);
+  });
+
+  if (destination) redirect(destination);
+  return result;
+}
+
+export async function signUp(
+  _previous: ActionResult<null> | null,
+  formData: FormData,
+): Promise<ActionResult<null>> {
+  let destination: string | null = null;
+
+  const result = await runAction(async () => {
+    const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) return fromZodError(parsed.error);
+
+    const gateway = await getAuthGateway();
+    const userId = await gateway.signUp({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      fullName: parsed.data.fullName,
+      phone: parsed.data.phone || null,
+    });
+
+    destination = await landingFor(userId, parsed.data.next);
+    return ok(null);
+  });
+
+  if (destination) redirect(destination);
+  return result;
+}
+
+export async function signOut(): Promise<void> {
+  const gateway = await getAuthGateway();
+  await gateway.signOut();
+  if (isDemoMode) await clearDemoSession();
+  redirect('/');
+}
+
+/**
+ * Demo mode only: switch identity without a password, so the whole
+ * marketplace loop can be walked in one sitting.
+ *
+ * Guarded at the top rather than by hiding the button, because a
+ * dev-only affordance that is merely invisible is not guarded at all.
+ */
+export async function signInAsDemoUser(email: string): Promise<void> {
+  if (!isDemoMode) {
+    throw new AuthError('Demo sign-in is not available here.', 'forbidden');
+  }
+
+  const gateway = await getAuthGateway();
+  const userId = await gateway.signIn(email, 'demo-password');
+  redirect(await landingFor(userId, null));
+}
+
+/**
+ * Where someone belongs after signing in.
+ *
+ * A studio owner wants their calendar, an admin wants the review queue,
+ * everyone else wants what they were doing. Only relative paths are
+ * honoured.
+ */
+async function landingFor(userId: string, next: string | undefined | null): Promise<string> {
+  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
+
+  const repository = await getRepository();
+  const user = await repository.getUser(userId);
+  if (user?.platformRole === 'admin') return '/admin';
+
+  const memberships = await repository.listMembershipsForUser(userId);
+  if (memberships.length > 0) return '/studio';
+
+  return '/account/bookings';
+}
+
+export async function requireEmailAvailable(email: string): Promise<ActionResult<null>> {
+  const repository = await getRepository();
+  const existing = await repository.getUserByEmail(email);
+  return existing ? fail('An account with that email already exists.', 'email') : ok(null);
+}

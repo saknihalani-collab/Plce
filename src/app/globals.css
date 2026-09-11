@@ -1,0 +1,856 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* ═══════════════════════════════════════════════════════════════
+   PL·CE design system
+   ───────────────────────────────────────────────────────────────
+   The product is about physical places, so the palette is taken from
+   interior materials rather than from software: paper, stone, ink, oak.
+   Olive, clay, cobalt and butter carry meaning and nothing else.
+
+   Two temperaments, one material world:
+
+     Discovery — contemporary interiors × Japanese spatial minimalism.
+                 Warm, quiet, editorial, image-led.
+
+     Studio &   Swiss information design × the same warm materials.
+     Admin      Precise, dense, calm. Never cold.
+
+   Three rules the whole system rests on:
+
+     1. Paper is the ground. Pure white is never the canvas.
+     2. Colour means something. If it is decorative, it is wrong.
+     3. Typography and space do the work. Decoration does not.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Materials ───────────────────────────────────────────────
+     Warm through the whole neutral range. A cool grey beside clay
+     reads as cheap; the warmth is what makes it feel made. */
+  --paper: #f6f3ec;
+  --canvas: #f6f3ec;
+  --surface: #fdfbf6;
+  --stone: #ebe5d9;
+  --stone-deep: #ded6c6;
+
+  /* Kept for the marketplace's recessed panels. */
+  --surface-sunken: #ebe5d9;
+  --surface-raised: #fffefb;
+
+  /* ── Ink ─────────────────────────────────────────────────────
+     Near-black with a trace of warmth, so type sits *in* the paper
+     rather than on top of it. */
+  --ink: #1b1916;
+  --ink-muted: #5c574e;
+  --ink-soft: #8a8377;
+  --ink-subtle: #8a8377;
+
+  /* ── Lines ───────────────────────────────────────────────────
+     Hairlines carry the structure. Shadows almost never do. */
+  --line-soft: #e6dfd2;
+  --line: #d9d1c1;
+  --line-strong: #c2b8a4;
+
+  /* ── Oak ─────────────────────────────────────────────────────
+     A deeper warm brown for rare structural moments. */
+  --oak: #6f5540;
+  --oak-soft: #f0e7dc;
+
+  /* ── Clay ────────────────────────────────────────────────────
+     The brand's warmth on Discovery; "needs attention" in Studio.
+     Never both on the same screen. */
+  --clay: #b8603a;
+  --clay-hover: #a45330;
+  --clay-ink: #8c4626;
+  --clay-soft: #f7e9e0;
+  --clay-line: #e8cdbc;
+
+  /* ── Olive ───────────────────────────────────────────────────
+     Confirmed, paid, available, settled. */
+  --olive: #6b7a4f;
+  --olive-ink: #55643c;
+  --olive-soft: #eaeee0;
+  --olive-line: #cdd6ba;
+
+  /* ── Cobalt ──────────────────────────────────────────────────
+     The one digital note: selected, active, now. Used in the
+     operational surfaces, almost never on Discovery. */
+  --cobalt: #2f4f8f;
+  --cobalt-ink: #24406f;
+  --cobalt-soft: #e6ebf5;
+  --cobalt-line: #c3cfe6;
+
+  /* ── Butter ──────────────────────────────────────────────────
+     Waiting on someone. The softest of the signals. */
+  --butter: #a8791f;
+  --butter-ink: #855e14;
+  --butter-soft: #f8efdb;
+  --butter-line: #e9d6ab;
+
+  /* ── Alert ───────────────────────────────────────────────────
+     Errors and destruction only. Never "unpaid". */
+  --alert: #a83b2b;
+  --alert-ink: #872e21;
+  --alert-soft: #f8e7e3;
+  --alert-line: #e9c4ba;
+
+  /* ── Radii ───────────────────────────────────────────────────
+     Moderate. Nothing here is a pill; the interface should feel
+     cut rather than moulded. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  /* ── Elevation ───────────────────────────────────────────────
+     Used sparingly — a drawer, a dialog. Structure comes from
+     hairlines and space, not from float. */
+  --elevation-sm: 0 1px 2px -1px rgb(27 25 22 / 0.06);
+  --elevation-md: 0 2px 6px -3px rgb(27 25 22 / 0.08), 0 8px 24px -12px rgb(27 25 22 / 0.1);
+  --elevation-lg: 0 8px 40px -12px rgb(27 25 22 / 0.18);
+
+  /* ── Type scale ──────────────────────────────────────────────
+     Four display sizes and no more. Each is a different kind of
+     statement, not an arbitrary step on a ramp: the page opener, a
+     section statement, a sub-statement, and a heading that still wants
+     to be the serif. */
+  --display-xl: clamp(3rem, 8.5vw, 7rem);
+  --display-lg: clamp(2.5rem, 5.5vw, 4.25rem);
+  --display-md: clamp(1.875rem, 3.4vw, 2.75rem);
+  --display-sm: clamp(1.375rem, 2.2vw, 1.75rem);
+
+  /* ── Section rhythm ──────────────────────────────────────────
+     One vertical measure, so sections cannot drift apart page by
+     page. Rooms in a building are not each a different height. */
+  --section-y: clamp(4.5rem, 10vw, 8.5rem);
+  --gutter: clamp(1.25rem, 4vw, 3.5rem);
+  --measure: 1320px;
+
+  /* ── Motion ──────────────────────────────────────────────────
+     Soft in, fast through, settled at rest. Things move the way
+     objects do: they arrive somewhere and stop. */
+  --ease-settle: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+  --duration-slow: 420ms;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
+  --color-stone: var(--stone);
+  --color-stone-deep: var(--stone-deep);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+
+  --color-oak: var(--oak);
+  --color-oak-soft: var(--oak-soft);
+
+  --color-clay: var(--clay);
+  --color-clay-hover: var(--clay-hover);
+  --color-clay-ink: var(--clay-ink);
+  --color-clay-soft: var(--clay-soft);
+  --color-clay-line: var(--clay-line);
+
+  --color-olive: var(--olive);
+  --color-olive-ink: var(--olive-ink);
+  --color-olive-soft: var(--olive-soft);
+  --color-olive-line: var(--olive-line);
+
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-ink: var(--cobalt-ink);
+  --color-cobalt-soft: var(--cobalt-soft);
+  --color-cobalt-line: var(--cobalt-line);
+
+  --color-butter: var(--butter);
+  --color-butter-ink: var(--butter-ink);
+  --color-butter-soft: var(--butter-soft);
+  --color-butter-line: var(--butter-line);
+
+  --color-alert: var(--alert);
+  --color-alert-ink: var(--alert-ink);
+  --color-alert-soft: var(--alert-soft);
+  --color-alert-line: var(--alert-line);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-DEFAULT: var(--radius);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+
+  /* Three registers, three jobs.
+
+       display — the serif. PL·CE's personality: statements, headlines,
+                 studio names, the numbers that matter. Not restraint —
+                 this face carries the brand and should be allowed to.
+       sans    — the utility. Navigation, labels, forms, the calendar,
+                 supporting copy. It gets out of the way.
+       mono    — times, money in tables, references. Digits must line up.
+
+     The contrast between the first two is the whole idea: a creative
+     world on top, serious infrastructure underneath. */
+  --font-display: var(--font-display-serif), 'Fraunces', Georgia, serif;
+  --font-sans: var(--font-instrument-sans), 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Focus is never removed, only drawn. Cobalt reads as "you are
+     here" against every material in the palette. */
+  :focus-visible {
+    outline: 2px solid var(--cobalt);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background: var(--clay-soft);
+    color: var(--clay-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ── Type ─────────────────────────────────────────────────────── */
+
+@layer components {
+  /*
+    The editorial voice.
+
+    Fraunces is a variable serif with an optical-size axis, which is what
+    lets one face carry a 7rem page opener and a 1.5rem studio name and
+    still read as the same voice. The soft and wonk axes are held at zero
+    — that keeps it architectural rather than whimsical, which is the
+    difference between a design publication and a friendly startup.
+
+    Never set below about 17px. Small serif here reads as a document.
+  */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-variation-settings:
+      'SOFT' 0,
+      'WONK' 0,
+      'opsz' 60;
+    letter-spacing: -0.018em;
+    line-height: 1.04;
+  }
+
+  .display-italic {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 400;
+    font-variation-settings:
+      'SOFT' 0,
+      'WONK' 0,
+      'opsz' 60;
+    letter-spacing: -0.01em;
+  }
+
+  /*
+    The four statements.
+
+    Larger optical sizes on the bigger steps, so the contrast tightens
+    and the hairlines thin as the type grows — the behaviour a serif cut
+    for display has, and the reason to use a variable face at all.
+  */
+  .display-xl {
+    font-size: var(--display-xl);
+    line-height: 0.94;
+    letter-spacing: -0.03em;
+    font-variation-settings:
+      'SOFT' 0,
+      'WONK' 0,
+      'opsz' 144;
+  }
+
+  .display-lg {
+    font-size: var(--display-lg);
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+    font-variation-settings:
+      'SOFT' 0,
+      'WONK' 0,
+      'opsz' 120;
+  }
+
+  .display-md {
+    font-size: var(--display-md);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    font-variation-settings:
+      'SOFT' 0,
+      'WONK' 0,
+      'opsz' 90;
+  }
+
+  .display-sm {
+    font-size: var(--display-sm);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+
+  /*
+    The line that follows a statement.
+
+    Deliberately sans and deliberately small. The drop from a 7rem serif
+    to a 17px grotesk is the contrast the whole identity rests on — if
+    this line grows, the statement above it stops being a statement.
+  */
+  .lede {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    max-width: 32rem;
+  }
+
+  /*
+    The label above a section. Structural: it names what follows and
+    carries the same tracking as the metadata lines, so the page reads
+    as one system.
+  */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  /* Times, money in tables, booking references. */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
+  }
+
+  /*
+    Metadata set the PL·CE way — small caps-ish tracking with the dot
+    as the separator. `428 spaces · Mumbai`.
+  */
+  .meta {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  /* ── The dot ──────────────────────────────────────────────────
+     PL·CE's smallest primitive: a point in space. It marks a status,
+     a location, a moment. Colour comes from a modifier, never from
+     the dot itself. */
+  .dot {
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 999px;
+    background: currentColor;
+    flex: none;
+  }
+
+  /* ── The hour strip ───────────────────────────────────────────
+     A row of cells, one per bookable hour, coloured by what is in
+     it. It appears at three scales — a sliver on a discovery card,
+     a band on a listing, the calendar itself — and always means the
+     same thing. Availability drawn as empty space. */
+  .hour-strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    align-items: stretch;
+  }
+
+  .hour-cell {
+    height: 100%;
+    background: var(--stone);
+    transition: background-color var(--duration-fast) var(--ease-settle);
+  }
+
+  .hour-cell[data-state='free'] {
+    background: var(--olive-line);
+  }
+
+  .hour-cell[data-state='booked'] {
+    background: var(--ink);
+    opacity: 0.8;
+  }
+
+  .hour-cell[data-state='blocked'] {
+    background: repeating-linear-gradient(-45deg, var(--line-strong) 0 2px, transparent 2px 4px);
+  }
+
+  .hour-cell[data-state='closed'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+
+  /* ── Surfaces ───────────────────────────────────────────────── */
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+  }
+
+  /* A panel that recedes rather than lifts. */
+  .panel {
+    background: var(--stone);
+    border-radius: var(--radius);
+  }
+
+  .rule {
+    height: 1px;
+    background: var(--line);
+    border: 0;
+  }
+}
+
+/* ── Controls ─────────────────────────────────────────────────── */
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      background-color var(--duration-fast) var(--ease-settle),
+      color var(--duration-fast) var(--ease-settle),
+      border-color var(--duration-fast) var(--ease-settle);
+    cursor: pointer;
+    border: 1px solid transparent;
+    padding: 0 1rem;
+    height: 2.5rem;
+  }
+
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  .btn-sm {
+    height: 2rem;
+    padding: 0 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-lg {
+    height: 3rem;
+    padding: 0 1.5rem;
+    font-size: 0.9375rem;
+  }
+
+  .btn-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+  }
+
+  /*
+    Ink is the primary action. An interior palette does not shout, and
+    a near-black button on warm paper is both the calmest and the most
+    confident thing on the page — which leaves clay free to mean
+    "this needs you" rather than "this is a button".
+  */
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #2f2b26;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line-strong);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--stone);
+    border-color: var(--ink-soft);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--stone);
+    color: var(--ink);
+  }
+
+  /* Reserved for the one emphatic moment on Discovery. */
+  .btn-clay {
+    background: var(--clay);
+    color: #fff;
+  }
+  .btn-clay:hover:not(:disabled) {
+    background: var(--clay-hover);
+  }
+
+  /* Kept as an alias so existing call sites keep working. */
+  .btn-ink {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-ink:hover:not(:disabled) {
+    background: #2f2b26;
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--alert-ink);
+    border-color: var(--alert-line);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: var(--alert-soft);
+    border-color: var(--alert);
+  }
+
+  /* ── Fields ─────────────────────────────────────────────────── */
+
+  .field {
+    width: 100%;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.625rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    transition:
+      border-color var(--duration-fast) var(--ease-settle),
+      box-shadow var(--duration-fast) var(--ease-settle);
+  }
+
+  .field::placeholder {
+    color: var(--ink-soft);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--cobalt);
+    box-shadow: 0 0 0 3px var(--cobalt-soft);
+  }
+
+  .field[aria-invalid='true'] {
+    border-color: var(--alert);
+  }
+
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .field-hint {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+  }
+
+  .field-error {
+    font-size: 0.8125rem;
+    color: var(--alert-ink);
+  }
+
+  /* ── Status tags ────────────────────────────────────────────────
+     Not pills. A small squared tag with a dot, so status reads as
+     information rather than as a decorative badge. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: var(--radius-xs);
+    padding: 0.1875rem 0.4375rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .badge-neutral {
+    background: var(--stone);
+    color: var(--ink-muted);
+    border-color: var(--line);
+  }
+  .badge-olive {
+    background: var(--olive-soft);
+    color: var(--olive-ink);
+    border-color: var(--olive-line);
+  }
+  .badge-butter {
+    background: var(--butter-soft);
+    color: var(--butter-ink);
+    border-color: var(--butter-line);
+  }
+  .badge-clay {
+    background: var(--clay-soft);
+    color: var(--clay-ink);
+    border-color: var(--clay-line);
+  }
+  .badge-alert {
+    background: var(--alert-soft);
+    color: var(--alert-ink);
+    border-color: var(--alert-line);
+  }
+  .badge-cobalt {
+    background: var(--cobalt-soft);
+    color: var(--cobalt-ink);
+    border-color: var(--cobalt-line);
+  }
+  .badge-ink {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* ── Tables ─────────────────────────────────────────────────────
+     Swiss: rules, not boxes. The grid is drawn with hairlines and
+     alignment, and nothing floats. */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .data-table th {
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 1rem 0.625rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .data-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr {
+    transition: background-color var(--duration-fast) var(--ease-settle);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--stone);
+  }
+}
+
+/* ── The dark room ────────────────────────────────────────────── */
+
+/*
+  `.on-ink` inverts the material, not the vocabulary.
+
+  Every token in this system names a *role* — `paper` is the ground,
+  `ink` is the type on it, `line` is the hairline between things. So a
+  section that wants to be a dark room redefines the materials those
+  roles resolve to, and every component inside keeps working without
+  knowing where it has been dropped.
+
+  The ground is a warm near-black with oak in it rather than a neutral
+  charcoal, so the footer reads as walnut in low light and not as a
+  dark-mode toggle. Used for whole sections only — never to make one
+  card stand out.
+
+  `.on-image` is the same inversion with no ground painted, for type
+  laid over a photograph. Without it, brand marks set in the light
+  palette quietly vanish against a dark frame — the wordmark's clay dot
+  is 4px across and disappears entirely on a grey ceiling.
+*/
+.on-ink,
+.on-image {
+  --paper: #1a1712;
+  --canvas: #1a1712;
+  --surface: #221e17;
+  --surface-raised: #2a251c;
+  --surface-sunken: #141109;
+  --stone: #262218;
+  --stone-deep: #302b20;
+
+  --ink: #f4efe4;
+  --ink-muted: #a9a08d;
+  --ink-soft: #7b7461;
+  --ink-subtle: #7b7461;
+
+  --line-soft: #2a251c;
+  --line: #373126;
+  --line-strong: #4d463a;
+
+  --oak: #c49a6c;
+  --oak-soft: #2e2619;
+
+  /* The signals lift a little to hold their meaning on a dark ground. */
+  --clay: #d1794f;
+  --clay-hover: #dd8a61;
+  --clay-ink: #e09566;
+  --clay-soft: #332117;
+  --clay-line: #4a2f20;
+
+  --olive: #97a878;
+  --olive-ink: #a8b98a;
+  --olive-soft: #23281a;
+  --olive-line: #363f27;
+
+  --butter: #cfa14f;
+  --butter-ink: #dbb066;
+  --butter-soft: #2e2413;
+  --butter-line: #443619;
+
+  --cobalt: #7d9ad4;
+  --cobalt-ink: #93abdd;
+  --cobalt-soft: #1c2333;
+  --cobalt-line: #2b3550;
+
+  --alert: #d47a66;
+  --alert-ink: #e08d79;
+  --alert-soft: #331d18;
+  --alert-line: #4a2a22;
+
+}
+
+.on-ink {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/*
+  A primary button inside a dark room cannot be ink — it would vanish
+  into the ground. It becomes paper instead, which keeps the same
+  relationship: the most confident thing on the surface is the thing
+  furthest from it.
+*/
+.on-ink .btn-primary,
+.on-image .btn-primary,
+.on-ink .btn-ink,
+.on-image .btn-ink {
+  background: var(--ink);
+  color: #1a1712;
+}
+
+.on-ink .btn-primary:hover:not(:disabled),
+.on-image .btn-primary:hover:not(:disabled),
+.on-ink .btn-ink:hover:not(:disabled),
+.on-image .btn-ink:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+/* ── Utilities ────────────────────────────────────────────────── */
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 999px;
+  }
+
+  /*
+    Motion: soft in, fast through, settled at rest. Used for arrivals
+    — a page, a drawer, a booking taking its place on the grid — and
+    nowhere else. Nothing in PL·CE floats, pulses or bounces.
+  */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .rise {
+    animation: rise var(--duration-slow) var(--ease-enter) both;
+  }
+
+  @keyframes settle {
+    from {
+      opacity: 0;
+      transform: scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .settle {
+    animation: settle var(--duration) var(--ease-enter) both;
+  }
+
+  /* An image that comes forward very slightly on hover — the only
+     scale transform in the product. */
+  .image-lift {
+    transition: transform var(--duration-slow) var(--ease-settle);
+  }
+
+  .group:hover .image-lift {
+    transform: scale(1.02);
+  }
+}

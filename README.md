@@ -1,0 +1,181 @@
+# PL·CE
+
+**Discover a space. Book a space. Run a space.**
+
+A marketplace for creative studios and the operating system those studios
+run on — one application, one database, three role-shaped surfaces.
+
+- **PL·CE Discovery** — customers find and book studios
+- **PL·CE Studio** — owners run bookings, calendar, customers, availability
+- **PL·CE Admin** — the platform owner reviews, approves and curates the marketplace
+
+The architecture, schema, route map and approval workflow are documented
+in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
+
+---
+
+## Running it
+
+```bash
+npm install
+npm run dev
+```
+
+Open <http://localhost:3100> (or 3000 if you drop the `--port` flag).
+
+**No configuration is needed.** With no credentials present, PL·CE boots
+against a seeded in-memory database and every flow works for real:
+applications are reviewed and approved, bookings are written and checked
+for overlap, images are uploaded to disk, and the WhatsApp assistant
+parses and books. Nothing is stubbed except the identity provider and the
+outbound Meta API call.
+
+### Signing in
+
+The sign-in page lists four seeded identities. Each one lands you
+somewhere different, which is the point — the product only makes sense
+when you have seen all three sides of it.
+
+| Who | Sees |
+|---|---|
+| **Priya Nair** — `priya@findplce.com` | PL·CE Admin, with applications waiting in the queue |
+| **Kabir Shah** — `kabir@studio404.in` | A live studio with a month of bookings behind it |
+| **Zoya Khan** — `zoya@terracesessions.in` | An owner who has had changes requested |
+| **Rahul Menon** — `rahul@example.com` | A customer with bookings |
+
+Any password of six characters or more works in demo mode.
+
+### The loop worth walking
+
+1. Sign in as **Priya**, open `/admin`, and approve an application.
+2. Sign out, go to `/discover` — that studio is now on the marketplace.
+3. Book it. Note the reference, e.g. `PLCE-8F42K`.
+4. Sign in as **Kabir**, open `/studio` — bookings from every source land
+   in the same calendar.
+5. Open `/studio/whatsapp` and type *"Booking for 5 to 7 for Shivam"*. It asks
+   which space, then which day, then books it — and never guesses either. Check
+   `/studio/calendar` and `/studio/analytics` afterwards: the booking is there,
+   its source is WhatsApp, and the activity log says what each message did.
+
+Two boundaries worth poking at while you are in there:
+
+- **Admin is private.** Nothing in the public UI links to `/admin`. Sign in as
+  Kabir (a studio owner) and type the URL: you get a 404, not a redirect —
+  because a redirect would confirm the page exists.
+- **CRM access is not gated on approval.** Sign in as **Zoya**, whose listing is
+  still awaiting changes. She gets her full calendar, customers and WhatsApp,
+  with a banner saying the listing is not on Discovery. Approval controls
+  publication, not whether someone may run their own studio.
+
+---
+
+## Going live
+
+Everything below is a configuration change. No feature code moves.
+
+### Database — Supabase
+
+```bash
+cp .env.example .env.local
+# set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+Run the migrations in order:
+
+```
+supabase/migrations/0001_schema.sql     tables, enums, the overlap constraint
+supabase/migrations/0002_rls.sql        row-level security and the approval guard
+supabase/migrations/0003_views.sql      aggregate views for discovery and the CRM
+supabase/migrations/0004_taxonomy.sql   starting categories and amenities
+supabase/migrations/0005_whatsapp_provenance.sql   booking-event and message provenance
+```
+
+The moment credentials are present, `lib/data/index.ts` swaps the
+in-memory repository for the Postgres one. A **production build refuses
+to start without credentials** unless `ALLOW_DEMO_MODE=true` — a mistyped
+environment variable should fail loudly, not quietly serve a fake
+marketplace.
+
+Create a public storage bucket named `studio-images` for listing
+photography. Without Supabase, uploads are written to `public/uploads`.
+
+### WhatsApp — Meta Cloud API
+
+Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
+`WHATSAPP_VERIFY_TOKEN` and `WHATSAPP_APP_SECRET`, then point the webhook
+at:
+
+```
+https://your-domain/api/whatsapp/webhook
+```
+
+The endpoint refuses every request without a valid
+`X-Hub-Signature-256`. Until it is configured, `/studio/whatsapp` runs
+the same handler from the browser so the behaviour can be seen and
+judged before a number is committed to Meta review.
+
+### AI
+
+Set `ANTHROPIC_API_KEY` to use Claude for intent extraction. Without it a
+deterministic parser handles the documented phrasings and asks a
+clarifying question whenever it is not certain — it degrades to
+*asking*, never to guessing.
+
+The model never writes to the database. It returns a structured intent
+which is Zod-parsed, resolved against the studio's own spaces and
+timezone, and executed by the same booking engine the website uses.
+
+### Payments
+
+`PAYMENTS_PROVIDER=razorpay` plus keys enables online payment. Without
+them bookings are recorded as unpaid and settled at the studio, which is
+how most Mumbai studios already work — the marketplace does not display a
+payment it did not take.
+
+---
+
+## Shape of the code
+
+```
+src/
+  app/          routes — thin: fetch, authorise, render
+  features/     <domain>/components and actions.ts
+  lib/
+    auth/       gateway, session, permissions
+    booking/    availability (pure) + engine (the only writer of bookings)
+    data/       one repository interface, two implementations
+    listing/    the approval state machine and the visibility rule
+    ai/         provider-agnostic intent extraction
+    whatsapp/   signature verification, conversation state, replies
+    storage/ payments/ maps/   provider seams
+  types/        domain.ts — the shared vocabulary
+supabase/migrations/
+```
+
+Three rules hold it together:
+
+1. **One source of truth.** Discovery, the CRM, Admin and WhatsApp are
+   four interfaces onto one set of tables.
+2. **One booking engine.** `createBooking()` is the only code that writes
+   a booking, so double-booking is prevented once rather than four times
+   — backed by a Postgres exclusion constraint for the concurrent case.
+3. **One visibility predicate.** `status = 'approved' AND is_published
+   AND NOT is_suspended`, stated in TypeScript, in both repositories, and
+   as an RLS policy. An unapproved studio is not hidden from `/discover`;
+   it is unreadable to an anonymous client.
+
+## Checks
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+## Not built
+
+Per the brief: no accounting, payroll, inventory, POS, loyalty, social
+feed, bidding, subscriptions, marketing automation, multi-country tax, or
+autonomous agents. Search-to-booking conversion and studio utilisation
+need event tracking this build does not collect, so `/admin/analytics`
+omits them rather than estimating them.
