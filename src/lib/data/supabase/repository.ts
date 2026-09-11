@@ -2710,7 +2710,7 @@ function paginated<T>(items: T[], total: number, page: number, pageSize: number)
  * else is logged and reported generically, because an unexpected
  * database message is as likely to leak schema detail as to help.
  */
-function throwIfError(error: PostgrestError | null, conflictMessage?: string): void {
+export function throwIfError(error: PostgrestError | null, conflictMessage?: string): void {
   if (!error) return;
 
   if (error.code === '42501' || error.code === 'PGRST301') {
@@ -2723,11 +2723,61 @@ function throwIfError(error: PostgrestError | null, conflictMessage?: string): v
     throw new RepositoryError(conflictMessage ?? 'That conflicts with something already saved.', 'conflict');
   }
 
-  console.error('[supabase]', error.code, error.message, error.details);
-  throw new RepositoryError(
-    conflictMessage ?? 'We could not reach the database. Please try again.',
-    'unavailable',
+  console.error(
+    '[supabase]',
+    JSON.stringify({
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    }),
   );
+
+  /*
+    Everything past here used to say "We could not reach the database",
+    which describes one cause and misdescribes every other. A missing
+    column and a failed constraint are not connectivity problems, and
+    telling an operator to try again sends them round a loop that cannot
+    end.
+
+    The messages below say what kind of thing went wrong without
+    reproducing schema detail, and carry the Postgres code. A five-digit
+    code discloses nothing a visitor could use and is the difference
+    between a diagnosable report and another round of guessing.
+  */
+  throw new RepositoryError(conflictMessage ?? describe(error), 'unavailable');
+}
+
+/** A generic failure, said accurately. */
+function describe(error: PostgrestError): string {
+  switch (error.code) {
+    case '23502':
+      return 'Something required was missing when saving. (database error 23502)';
+    case '23514':
+      return 'One of those values is not allowed. (database error 23514)';
+    case '22P02':
+      return 'One of those values was the wrong type. (database error 22P02)';
+    case 'PGRST116':
+      return 'That saved, but could not be read back. (database error PGRST116)';
+
+    /*
+      The schema the code expects is not the schema that is deployed —
+      almost always a migration that has not been run. Worth naming
+      exactly, because no amount of retrying fixes it and the remedy is
+      a specific one.
+    */
+    case '42703':
+    case '42P01':
+      return 'The database is missing something this version expects — a migration may not have been run. (database error ' + error.code + ')';
+
+    case 'PGRST301':
+      return 'You do not have permission to do that.';
+
+    default:
+      return error.code
+        ? `We could not save that. (database error ${error.code})`
+        : 'We could not reach the database. Please try again.';
+  }
 }
 
 function prune<T extends object>(patch: T): Partial<T> {
