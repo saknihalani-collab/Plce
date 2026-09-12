@@ -102,7 +102,16 @@ class SupabaseStorageProvider implements StorageProvider {
     });
 
     if (error) {
-      throw new StorageError('That image could not be uploaded. Try again.');
+      /*
+        The reason matters more than the fact. "Try again" is advice for
+        a blip, and every common cause here is not a blip: a missing
+        bucket and a missing policy both fail identically forever, and
+        telling somebody to retry sends them round a loop that cannot
+        end. The specific message goes to the log; the person gets the
+        one sentence that tells them whether this is theirs to fix.
+      */
+      console.error('[storage] upload failed', error.message);
+      throw new StorageError(describeUploadFailure(error.message));
     }
 
     return {
@@ -110,6 +119,32 @@ class SupabaseStorageProvider implements StorageProvider {
       path: objectPath,
     };
   }
+}
+
+/**
+ * Turns a Supabase Storage failure into something worth reading.
+ *
+ * The two setup failures are worth separating from everything else
+ * because they are permanent and they are ours — an owner retrying an
+ * upload will never fix either one.
+ */
+export function describeUploadFailure(message: string): string {
+  const reason = message.toLowerCase();
+
+  if (reason.includes('bucket not found')) {
+    return 'Image storage is not set up on this deployment yet. This is ours to fix, not yours.';
+  }
+  if (reason.includes('row-level security') || reason.includes('violates')) {
+    return 'This deployment is not allowing image uploads yet. This is ours to fix, not yours.';
+  }
+  if (reason.includes('payload too large') || reason.includes('maximum allowed size')) {
+    return 'That image is too large for storage. Export a smaller version.';
+  }
+  if (reason.includes('already exists')) {
+    return 'That image is already uploaded.';
+  }
+
+  return 'That image could not be uploaded. Try again.';
 }
 
 export function getStorageProvider(): StorageProvider {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getStorageProvider, StorageError } from '@/lib/storage/provider';
+import { describeUploadFailure, getStorageProvider, StorageError } from '@/lib/storage/provider';
 import { getDemoMedia } from '@/lib/storage/demo-media';
 
 /**
@@ -73,5 +73,39 @@ describe('demo uploads', () => {
     }
 
     expect(getDemoMedia(firstId)).toBeNull();
+  });
+});
+
+/**
+ * What a failed Supabase upload tells the person looking at it.
+ *
+ * The step used to answer every failure with "Try again", including the
+ * two that no amount of trying fixes: a bucket that was never created,
+ * and a bucket with no policy allowing the write. Both are deployment
+ * faults, both are permanent, and both sent owners round a loop with no
+ * exit. These pin the distinction so it cannot quietly collapse back.
+ */
+describe('storage failure messages', () => {
+  it('names a missing bucket as ours to fix, not the owner’s', () => {
+    const message = describeUploadFailure('Bucket not found');
+    expect(message).toContain('not set up');
+    expect(message).not.toContain('Try again');
+  });
+
+  it('does the same for a bucket that denies the write', () => {
+    const message = describeUploadFailure(
+      'new row violates row-level security policy for table "objects"',
+    );
+    expect(message).toContain('ours to fix');
+    expect(message).not.toContain('Try again');
+  });
+
+  it('sends an oversized file back to the person who can shrink it', () => {
+    const message = describeUploadFailure('The object exceeded the maximum allowed size');
+    expect(message).toContain('smaller version');
+  });
+
+  it('still offers a retry for a failure that might genuinely be transient', () => {
+    expect(describeUploadFailure('network error')).toContain('Try again');
   });
 });
