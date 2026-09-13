@@ -10,7 +10,7 @@ import {
   rescheduleBooking,
   type BookingActor,
 } from '@/lib/booking/engine';
-import type { DataRepository } from '@/lib/data/repository';
+import { RepositoryError, type DataRepository } from '@/lib/data/repository';
 import {
   formatDateRelative,
   formatDateWithDay,
@@ -280,6 +280,29 @@ function answerToQuestion(
     default:
       return {};
   }
+}
+
+/**
+ * What to say when handling a message threw.
+ *
+ * "Something went wrong on our end" is the same flattening that has
+ * hidden every real fault in this system: it reads as a transient blip
+ * and invites a retry, while the causes worth reporting — a database
+ * that did not answer, a permission that is missing — are neither
+ * transient nor fixable by trying again.
+ *
+ * A `RepositoryError` already carries a sentence written for a person
+ * to read; `throwIfError` exists to produce exactly that. Passing it
+ * through tells the owner whether the problem is theirs or ours, and
+ * costs nothing, because the message was never a stack trace.
+ *
+ * Anything else keeps the generic line. An unclassified throw has no
+ * message fit to show a stranger, and this reply reaches whoever sent
+ * the message — verified or not.
+ */
+export function explainFailure(error: unknown): string {
+  if (error instanceof RepositoryError) return error.message;
+  return 'Something went wrong on our end. Try again in a moment.';
 }
 
 /* ── Verification ───────────────────────────────────────────────── */

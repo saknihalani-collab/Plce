@@ -9,7 +9,7 @@ import {
   verifySubscription,
   type InboundWhatsAppMessage,
 } from '@/lib/whatsapp/client';
-import { handleInboundMessage } from '@/lib/whatsapp/handler';
+import { explainFailure, handleInboundMessage } from '@/lib/whatsapp/handler';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -110,10 +110,7 @@ async function processMessages(messages: InboundWhatsAppMessage[]): Promise<void
     } catch (error) {
       // One bad message must not stop the rest of the batch.
       console.error('[whatsapp] failed to handle message', message.messageId, error);
-      await sendWhatsAppMessage(
-        message.from,
-        'Something went wrong on our end. Try again in a moment.',
-      );
+      await sendWhatsAppMessage(message.from, explainFailure(error));
     }
   }
 }

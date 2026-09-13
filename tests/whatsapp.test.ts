@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createBooking } from '@/lib/booking/engine';
+import { RepositoryError } from '@/lib/data/repository';
 import { DemoRepository } from '@/lib/data/demo/repository';
 import { db, resetDb } from '@/lib/data/demo/store';
 import { instantToZoned } from '@/lib/time';
-import { handleInboundMessage } from '@/lib/whatsapp/handler';
+import { explainFailure, handleInboundMessage } from '@/lib/whatsapp/handler';
 import {
   generateVerificationCode,
   hashVerificationCode,
@@ -691,5 +692,40 @@ describe('two-message create_booking', () => {
     expect(first.outcome).toBe('booking_created');
     expect(replay.duplicate).toBe(true);
     expect(await bookingsFor(studio.organizationId)).toHaveLength(1);
+  });
+});
+
+/* ── Failure reporting ──────────────────────────────────────────── */
+
+/**
+ * What a thrown handler tells the owner.
+ *
+ * The webhook answered every exception with "Something went wrong on
+ * our end. Try again in a moment." — advice for a blip, given for
+ * faults that were permanent. A database that did not answer and a
+ * missing permission both read as transient, so the owner retried, and
+ * the one sentence that would have identified either never left the
+ * server. These pin the classification so it cannot collapse back.
+ */
+describe('webhook failure messages', () => {
+  it('passes a repository error through, because it was written to be read', () => {
+    const error = new RepositoryError(
+      'The database did not answer in time. Nothing was lost — try that again.',
+      'unavailable',
+    );
+    expect(explainFailure(error)).toBe(error.message);
+    expect(explainFailure(error)).not.toContain('Something went wrong');
+  });
+
+  it('names a permission problem rather than inviting a retry', () => {
+    const error = new RepositoryError('You do not have permission to do that.', 'forbidden');
+    expect(explainFailure(error)).toBe('You do not have permission to do that.');
+  });
+
+  it('stays generic for anything unclassified, since the reply reaches strangers', () => {
+    expect(explainFailure(new TypeError('x.y is not a function'))).toBe(
+      'Something went wrong on our end. Try again in a moment.',
+    );
+    expect(explainFailure('not even an error')).toContain('Something went wrong');
   });
 });
