@@ -592,3 +592,104 @@ describe('security', () => {
     expect(result.organizationId).not.toBe(foreign.organizationId);
   });
 });
+
+/* ── Clarification across two messages ──────────────────────────── */
+
+/**
+ * A booking that needs one more answer.
+ *
+ * "Book tomorrow 3pm to 6pm" carries a date and a window but no
+ * customer, which is the ordinary way an owner types it. The handler
+ * has to hold the half-finished intent somewhere, ask the one question
+ * it still needs, and then finish the booking when the answer arrives —
+ * through the same engine as every other path, not a shortcut that
+ * skips the notice and collision rules.
+ *
+ * The pending state lives in `whatsapp_conversations`, which is the one
+ * table the verification flow never touches. That made it the last
+ * thing in the WhatsApp path to run against a real database, so it is
+ * worth pinning here rather than discovering later.
+ */
+describe('two-message create_booking', () => {
+  /** Production's shape: one bookable space, so no space question. */
+  function singleSpaceStudio() {
+    const studio = studio404();
+    const mine = db().spaces.filter((space) => space.studioId === studio.id);
+    for (const space of mine.slice(1)) space.isActive = false;
+    return studio;
+  }
+
+  it('asks for the customer, remembers the rest, and books on the answer', async () => {
+    const studio = singleSpaceStudio();
+    clearCalendar(studio.organizationId);
+    const before = (await bookingsFor(studio.organizationId)).length;
+
+    const asked = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Book tomorrow 3pm to 6pm',
+      messageId: 'wamid.clarify-1',
+    });
+
+    expect(asked.outcome).toBe('clarification');
+    expect(asked.reply).toBe('Who is it for?');
+    // Nothing is booked on a question.
+    expect(await bookingsFor(studio.organizationId)).toHaveLength(before);
+
+    // The half-finished intent survives between two separate deliveries.
+    const pending = await repository.getWhatsAppConversation(
+      studio.organizationId,
+      OWNER_PHONE,
+    );
+    expect(pending?.awaiting).toBe('customerName');
+    expect(pending?.intent).toMatchObject({ kind: 'create_booking', start: '15:00', end: '18:00' });
+
+    const booked = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Shivam',
+      messageId: 'wamid.clarify-2',
+    });
+
+    expect(booked.outcome).toBe('booking_created');
+    expect(booked.bookingId).toBeTruthy();
+
+    const bookings = await bookingsFor(studio.organizationId);
+    expect(bookings).toHaveLength(before + 1);
+
+    const created = bookings.find((booking) => booking.id === booked.bookingId);
+    expect(created?.customerName).toBe('Shivam');
+    // The owner asked for it, so it is not waiting on the owner.
+    expect(created?.status).toBe('confirmed');
+    expect(created?.source).toBe('whatsapp');
+
+    // The conversation is spent, not left to fire again later.
+    expect(
+      await repository.getWhatsAppConversation(studio.organizationId, OWNER_PHONE),
+    ).toBeNull();
+  });
+
+  it('does not book twice when Meta redelivers the answer', async () => {
+    const studio = singleSpaceStudio();
+    clearCalendar(studio.organizationId);
+
+    await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Book tomorrow 3pm to 6pm',
+      messageId: 'wamid.dupe-1',
+    });
+
+    const first = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Shivam',
+      messageId: 'wamid.dupe-2',
+    });
+    const replay = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Shivam',
+      messageId: 'wamid.dupe-2',
+    });
+
+    expect(first.outcome).toBe('booking_created');
+    expect(replay.duplicate).toBe(true);
+    expect(await bookingsFor(studio.organizationId)).toHaveLength(1);
+  });
+});

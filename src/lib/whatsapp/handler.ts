@@ -202,6 +202,7 @@ async function respond(
   const merged = intentSchema.safeParse({
     ...(pending?.intent ?? {}),
     ...stripUndefined(fresh as Record<string, unknown>),
+    ...answerToQuestion(pending, text, fresh),
     kind: fresh.kind === 'unknown' ? (pending?.intent?.kind ?? 'unknown') : fresh.kind,
   });
 
@@ -225,6 +226,59 @@ async function respond(
     default:
       await repository.clearWhatsAppConversation(organizationId, message.phone);
       return { reply: helpText(studio), organizationId, intent, outcome: 'help' };
+  }
+}
+
+/**
+ * Reads the reply to a question we asked.
+ *
+ * `ask` records which field it is waiting on, and until now nothing
+ * read it back. That made the second half of every clarification
+ * unreachable: "Who is it for?" produces "Shivam", which names no
+ * command, so the merge kept `create_booking` with `customerName`
+ * still missing and the same question was asked again. Forever.
+ *
+ * The parser is no help here. It is given the pending intent as
+ * context, so it echoes that intent's kind back rather than reporting
+ * `unknown` — which means "did it recognise anything" cannot
+ * distinguish an answer from a fresh instruction. What does
+ * distinguish them is whether it recognised something *different*: an
+ * owner who replies to "Who is it for?" with "what's on today" has
+ * changed the subject, not named a customer called "what's on today".
+ *
+ * Within the same intent, a message that did not fill the awaited
+ * field is taken at face value as the answer. The cost of that is an
+ * owner who replies with a time instead of a name gets a customer
+ * named after a time — recoverable with "stop", and better than a
+ * question that can never be answered.
+ *
+ * Dates and times are left alone deliberately: those parse on their
+ * own, so the ordinary merge already carries them, and forcing the raw
+ * text in would overwrite a good parse with a worse one.
+ */
+function answerToQuestion(
+  pending: { intent?: unknown; awaiting?: string } | null,
+  text: string,
+  fresh: Intent,
+): Record<string, unknown> {
+  const awaiting = pending?.awaiting;
+  if (!awaiting) return {};
+
+  const pendingKind = (pending?.intent as { kind?: string } | undefined)?.kind;
+  if (fresh.kind !== 'unknown' && fresh.kind !== pendingKind) return {};
+
+  const answer = text.trim();
+  if (!answer) return {};
+
+  const supplied = fresh as unknown as Record<string, unknown>;
+
+  switch (awaiting) {
+    case 'customerName':
+      return supplied.customerName ? {} : { customerName: answer };
+    case 'space':
+      return supplied.space ? {} : { space: answer };
+    default:
+      return {};
   }
 }
 
