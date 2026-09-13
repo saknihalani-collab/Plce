@@ -129,17 +129,40 @@ plans. Share the production URL, not a preview one.
 **To go live** — about three minutes, and worth it before showing anyone
 who will click around:
 
-1. Create a Supabase project (the free tier is enough).
+1. Create a Supabase project (the free tier is enough). **Note which
+   region you pick** — step 4 has to agree with it.
 2. SQL Editor → paste `supabase/setup.sql` → Run. That is every
-   migration in order, in one file.
-3. Storage → new **public** bucket named `studio-images`.
-4. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` on
-   the host, and delete `.env.production`.
+   migration in order, in one file, including the `studio-images`
+   storage bucket and the policies that let an owner upload to it.
+3. Set on the host, then delete `.env.production`:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+4. Point the functions at the database's region. `vercel.json` pins
+   `syd1`, which matches a Supabase project in `ap-southeast-2`. If your
+   project lives elsewhere, change it.
 5. Redeploy.
 
 `NEXT_PUBLIC_*` variables are inlined at build time, so they have to
 exist *before* the build — a host that already built without them needs
-a redeploy, not a restart.
+a redeploy, not a restart. The same is true of every other variable
+here: Vercel injects them at deploy time, so adding one to a running
+project changes nothing until the next deployment.
+
+**On the region.** The app makes several sequential queries per request,
+so function-to-database latency is multiplied, not paid once. Functions
+in `iad1` against a database in `ap-southeast-2` put roughly 200ms of
+Pacific between every one of them, which is enough to intermittently
+exceed the timeout — and it fails as unrelated-looking symptoms across
+signup, uploads and the WhatsApp webhook rather than as anything that
+names latency. Keep the two together.
+
+**On `SUPABASE_SERVICE_ROLE_KEY`.** Exactly one caller needs it: the
+WhatsApp webhook, which has no browser session to derive authority from.
+Everything else uses the anon key and goes through RLS. That makes its
+absence invisible — the site works, signup works, listings work, and
+only inbound WhatsApp fails, silently, because the repository throws
+before any handler runs.
 
 Three failure modes, all deliberate:
 
