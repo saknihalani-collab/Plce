@@ -144,6 +144,25 @@ export async function handleInboundMessage(
 
   const reply = await respond(repository, studio, account.organizationId, message, now);
 
+  /*
+    No `externalId` on the reply.
+
+    `external_id` is Meta's id for *this* row's message, and the unique
+    index over it is what makes the inbound claim idempotent. Stamping
+    the inbound id onto the outbound row claimed the same id twice: the
+    claim inserted it, this insert collided with it, and every message
+    that got far enough to earn a reply died on 23505 — reported to the
+    owner as "That conflicts with something already saved."
+
+    Verification survived only by accident. Its own outbound log never
+    passed an id, so it never collided, which is why possession
+    challenges worked while every booking failed.
+
+    The reply's real Meta id is not knowable here anyway: it comes back
+    from the send, which happens in the route after this returns. The
+    inbound row already records the id, and the two rows correlate by
+    organisation, phone and time.
+  */
   await repository.logWhatsAppMessage({
     organizationId: account.organizationId,
     direction: 'outbound',
@@ -152,7 +171,6 @@ export async function handleInboundMessage(
     intent: reply.intent as unknown as Record<string, unknown> | null,
     outcome: reply.outcome,
     bookingId: reply.bookingId ?? null,
-    externalId: message.messageId ?? null,
   });
 
   return reply;

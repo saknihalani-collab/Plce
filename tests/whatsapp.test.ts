@@ -729,3 +729,59 @@ describe('webhook failure messages', () => {
     expect(explainFailure('not even an error')).toContain('Something went wrong');
   });
 });
+
+/* ── The id collision ───────────────────────────────────────────── */
+
+/**
+ * A reply must not claim the id of the message it answers.
+ *
+ * `external_id` carries Meta's id for the row it sits on, and the
+ * partial unique index over it — spanning both directions — is what
+ * makes the inbound claim idempotent. Writing the inbound id onto the
+ * outbound row claimed it twice, so every message that got far enough
+ * to earn a reply died on 23505 and reached the owner as "That
+ * conflicts with something already saved."
+ *
+ * Verification survived by accident: its outbound log never passed an
+ * id. That is precisely why possession challenges worked while every
+ * booking failed, and why this is pinned per-direction rather than by
+ * asserting the flow merely completes.
+ */
+describe('external id ownership', () => {
+  it('logs the reply without the inbound message id', async () => {
+    const studio = studio404();
+    await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Book tomorrow 3 p.m to 6 p.m',
+      messageId: 'wamid.collision-check',
+    });
+
+    const logged = await repository.listWhatsAppMessages(studio.organizationId, 50);
+    const claimed = logged.filter((row) => row.externalId === 'wamid.collision-check');
+
+    // Exactly one row owns the id, and it is the one Meta actually sent.
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]!.direction).toBe('inbound');
+
+    // The reply exists — it simply does not carry the id.
+    const outbound = logged.filter((row) => row.direction === 'outbound');
+    expect(outbound.length).toBeGreaterThan(0);
+    expect(outbound.every((row) => row.externalId !== 'wamid.collision-check')).toBe(true);
+  });
+
+  it('still refuses a redelivery of the same inbound id', async () => {
+    const first = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Book tomorrow 3 p.m to 6 p.m',
+      messageId: 'wamid.replay',
+    });
+    const second = await handleInboundMessage(repository, {
+      phone: OWNER_PHONE,
+      body: 'Book tomorrow 3 p.m to 6 p.m',
+      messageId: 'wamid.replay',
+    });
+
+    expect(first.duplicate).toBeFalsy();
+    expect(second.duplicate).toBe(true);
+  });
+});

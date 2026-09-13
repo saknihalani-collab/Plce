@@ -1536,6 +1536,24 @@ export class DemoRepository implements DataRepository {
     bookingId?: string | null;
     externalId?: string | null;
   }): Promise<WhatsAppMessage> {
+    /*
+      The same partial unique index Postgres enforces:
+
+        whatsapp_messages (external_id) where external_id is not null
+
+      It spans both directions, so an outbound row carrying the inbound
+      message's id collides with the claim that inserted it. Leaving
+      that unenforced here is how a production-only failure hid behind
+      a passing suite — the demo repository is a test double for
+      Postgres, and a double that accepts what Postgres rejects is
+      worse than no double at all.
+    */
+    if (input.externalId && this.data.whatsappMessages.some(
+      (existing) => existing.externalId === input.externalId,
+    )) {
+      throw new RepositoryError('That conflicts with something already saved.', 'conflict');
+    }
+
     const message: WhatsAppMessage = {
       id: newId('wam'),
       organizationId: input.organizationId,
