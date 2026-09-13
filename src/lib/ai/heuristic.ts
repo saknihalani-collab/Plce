@@ -18,7 +18,7 @@ export class HeuristicIntentProvider implements IntentProvider {
   readonly name = 'heuristic';
 
   async interpret(message: string, context: IntentContext): Promise<Intent> {
-    const text = message.toLowerCase().trim();
+    const text = normaliseMeridiem(message.toLowerCase().trim());
     if (!text) return { kind: 'unknown' };
 
     const space = matchSpace(text, message, context.spaceNames);
@@ -136,6 +136,27 @@ export class HeuristicIntentProvider implements IntentProvider {
 }
 
 /* ── Matchers ───────────────────────────────────────────────────── */
+
+/**
+ * Writes every spelling of am/pm the same way.
+ *
+ * People type "3 p.m to 6 p.m" as readily as "3pm to 6pm", and the time
+ * patterns only ever matched the second. The first parsed as a bare
+ * "3 ... 6" with no range keyword between them, so the whole time range
+ * was lost and the owner was asked for a time they had already given —
+ * a question that reads as the parser not listening.
+ *
+ * Normalising once here rather than widening each pattern keeps the
+ * expressions readable and means the single-time matcher gets the same
+ * treatment for free.
+ *
+ * Deliberately narrow: only a/p followed by m, with optional dots and a
+ * single optional space. It cannot swallow a space name containing
+ * "am", because the m must be the end of the token.
+ */
+function normaliseMeridiem(text: string): string {
+  return text.replace(/\b([ap])\.?\s?m\.?(?=\W|$)/g, '$1m');
+}
 
 /**
  * Space names are matched against the studio's own list rather than a
